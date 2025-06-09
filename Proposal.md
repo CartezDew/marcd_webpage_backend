@@ -1,15 +1,6 @@
-# Description
-# MVP's
-# Stretch Goals
-# Hierchy Diagram
-# ERD
-# Routes
-# Timeline
-# Wireframe
-# Tasks
-
 
 # Marc’d Webpage Proposal
+
 
 ## 📌 Description
 
@@ -143,6 +134,9 @@ Report
 +-----------------------------------------+
 | Footer |
 +-----------------------------------------+
+
+![Marc'd Landing Page Mockup](https://i.postimg.cc/5yjmpRh4/667f713c-f671-409e-af85-7f92fb077969.png)
+
 
 ---
 
