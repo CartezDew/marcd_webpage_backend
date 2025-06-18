@@ -30,6 +30,9 @@ from .serializers import (
 
 
 class Landing(APIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+    
     def get(self, request):
         return Response({"message": "Welcome to the Marc'd API landing route!"})
 
@@ -47,6 +50,9 @@ class FeaturesView(APIView):
 
 
 class ContactView(APIView):
+    authentication_classes = []  # No authentication required
+    permission_classes = [permissions.AllowAny]  # Public access
+    
     def post(self, request):
         serializer = ContactSubmissionSerializer(data=request.data)
         if serializer.is_valid():
@@ -114,9 +120,9 @@ class TruckStopReviewViewSet(viewsets.ModelViewSet):
 class UserFeedbackViewSet(viewsets.ModelViewSet):
     queryset = UserFeedback.objects.all()
     serializer_class = UserFeedbackSerializer
-    authentication_classes = []  # No authentication required
+    authentication_classes = [TokenAuthentication]
 
     def get_permissions(self):
-        if self.action == 'create':
-            return [permissions.AllowAny()]
-        return [permissions.IsAdminUser()]
+        if self.action in ['list', 'retrieve', 'update', 'partial_update', 'destroy']:
+            return [permissions.IsAdminUser()]
+        return [permissions.AllowAny()]
