@@ -14,7 +14,7 @@ urlpatterns = [
     path('features/', FeaturesView.as_view(), name='features'),
     path('contact/', ContactView.as_view(), name='contact'),
     path('contactus/', ContactUsViewSet.as_view({'get': 'list', 'post': 'create'}), name='contactus-list'),
-    path('contactus/<int:pk>/', ContactUsViewSet.as_view({
+    path('contactus/<str:contact_id>/', ContactUsViewSet.as_view({
         'get': 'retrieve',
         'put': 'update',
         'patch': 'partial_update',

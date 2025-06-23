@@ -7,8 +7,8 @@ import re
 class ContactUsSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContactUs
-        fields = ['contact_id', 'first_name', 'last_name', 'email', 'social_media', 'phone', 'feedback_type', 'message', 'created_at', 'is_read']
-        read_only_fields = ['contact_id', 'created_at', 'is_read']
+        fields = ['id', 'contact_id', 'first_name', 'last_name', 'email', 'social_media', 'phone', 'feedback_type', 'message', 'created_at', 'is_read']
+        read_only_fields = ['id', 'contact_id', 'created_at', 'is_read']
 
     def validate_phone(self, value):
         if value:

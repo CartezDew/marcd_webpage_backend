@@ -65,13 +65,14 @@ class ContactListView(ListAPIView):
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAdminUser]
     filter_backends = [SearchFilter]
-    search_fields = ['contact_id', 'first_name', 'last_name', 'email', 'feedback_type', 'message']
+    search_fields = ['id', 'contact_id', 'first_name', 'last_name', 'email', 'feedback_type', 'message']
 
 
 class ContactUsViewSet(viewsets.ModelViewSet):
     queryset = ContactUs.objects.all()
     serializer_class = ContactUsSerializer
     authentication_classes = [TokenAuthentication]
+    lookup_field = 'contact_id'
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'update', 'partial_update', 'destroy']:
