@@ -14,18 +14,16 @@ from django.views.generic import TemplateView
 from django.shortcuts import render, redirect
 
 from .models import (
-    ContactSubmission,
     TruckStop,
     WeatherData,
     TruckStopReview,
-    UserFeedback
+    ContactUs
 )
 from .serializers import (
-    ContactSubmissionSerializer,
     TruckStopSerializer,
     WeatherDataSerializer,
     TruckStopReviewSerializer,
-    UserFeedbackSerializer
+    ContactUsSerializer
 )
 
 
@@ -54,7 +52,7 @@ class ContactView(APIView):
     permission_classes = [permissions.AllowAny]  # Public access
     
     def post(self, request):
-        serializer = ContactSubmissionSerializer(data=request.data)
+        serializer = ContactUsSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
             return Response({"message": "Thanks for reaching out!"}, status=status.HTTP_201_CREATED)
@@ -62,12 +60,23 @@ class ContactView(APIView):
 
 
 class ContactListView(ListAPIView):
-    queryset = ContactSubmission.objects.all()
-    serializer_class = ContactSubmissionSerializer
+    queryset = ContactUs.objects.all()
+    serializer_class = ContactUsSerializer
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAdminUser]
     filter_backends = [SearchFilter]
-    search_fields = ['first_name', 'last_name', 'email']
+    search_fields = ['contact_id', 'first_name', 'last_name', 'email', 'feedback_type', 'message']
+
+
+class ContactUsViewSet(viewsets.ModelViewSet):
+    queryset = ContactUs.objects.all()
+    serializer_class = ContactUsSerializer
+    authentication_classes = [TokenAuthentication]
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve', 'update', 'partial_update', 'destroy']:
+            return [permissions.IsAdminUser()]
+        return [permissions.AllowAny()]
 
 
 class TruckStopViewSet(viewsets.ModelViewSet):
@@ -115,14 +124,3 @@ class TruckStopReviewViewSet(viewsets.ModelViewSet):
     serializer_class = TruckStopReviewSerializer
     authentication_classes = []  # No authentication required
     permission_classes = [permissions.AllowAny]
-
-
-class UserFeedbackViewSet(viewsets.ModelViewSet):
-    queryset = UserFeedback.objects.all()
-    serializer_class = UserFeedbackSerializer
-    authentication_classes = [TokenAuthentication]
-
-    def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'update', 'partial_update', 'destroy']:
-            return [permissions.IsAdminUser()]
-        return [permissions.AllowAny()]

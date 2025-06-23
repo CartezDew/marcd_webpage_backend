@@ -3,18 +3,23 @@ from .views import (
     Landing,
     FeaturesView,
     ContactView,
-    ContactListView,
+    ContactUsViewSet,
     TruckStopViewSet,
     WeatherDataViewSet,
     TruckStopReviewViewSet,
-    UserFeedbackViewSet,
 )
 
 urlpatterns = [
     path('', Landing.as_view(), name='landing'),
     path('features/', FeaturesView.as_view(), name='features'),
     path('contact/', ContactView.as_view(), name='contact'),
-    path('contact/list/', ContactListView.as_view(), name='contact-list'),
+    path('contactus/', ContactUsViewSet.as_view({'get': 'list', 'post': 'create'}), name='contactus-list'),
+    path('contactus/<int:pk>/', ContactUsViewSet.as_view({
+        'get': 'retrieve',
+        'put': 'update',
+        'patch': 'partial_update',
+        'delete': 'destroy'
+    }), name='contactus-detail'),
     path('truck-stops/', TruckStopViewSet.as_view({'get': 'list', 'post': 'create'}), name='truck-stop-list'),
     path('truck-stops/<int:pk>/', TruckStopViewSet.as_view({
         'get': 'retrieve',
@@ -37,11 +42,4 @@ urlpatterns = [
         'patch': 'partial_update',
         'delete': 'destroy'
     }), name='review-detail'),
-    path('feedback/', UserFeedbackViewSet.as_view({'get': 'list', 'post': 'create'}), name='feedback-list'),
-    path('feedback/<int:pk>/', UserFeedbackViewSet.as_view({
-        'get': 'retrieve',
-        'put': 'update',
-        'patch': 'partial_update',
-        'delete': 'destroy'
-    }), name='feedback-detail'),
 ]
