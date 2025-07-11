@@ -98,17 +98,27 @@ TEMPLATES = [
 WSGI_APPLICATION = 'marcdwebpage.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+import os
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+SECRET_KEY = 'django-insecure-...)'
+
+DEBUG = True
+
+ALLOWED_HOSTS = ['*']
+
+# ... rest of your settings unchanged
 
 DATABASES = {
     'default': {
         'ENGINE': 'django.contrib.gis.db.backends.postgis',
-        'NAME': 'marcd_db',
-        'USER': 'marcd_user',
-        'PASSWORD': 'marcd_password',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': os.environ.get('PGDATABASE'),
+        'USER': os.environ.get('PGUSER'),
+        'PASSWORD': os.environ.get('PGPASSWORD'),
+        'HOST': os.environ.get('PGHOST'),
+        'PORT': os.environ.get('PGPORT', '5432'),
     }
 }
 
