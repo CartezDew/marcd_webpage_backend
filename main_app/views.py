@@ -14,15 +14,9 @@ from django.views.generic import TemplateView
 from django.shortcuts import render, redirect
 
 from .models import (
-    TruckStop,
-    WeatherData,
-    TruckStopReview,
     ContactUs
 )
 from .serializers import (
-    TruckStopSerializer,
-    WeatherDataSerializer,
-    TruckStopReviewSerializer,
     ContactUsSerializer
 )
 
@@ -80,48 +74,4 @@ class ContactUsViewSet(viewsets.ModelViewSet):
         return [permissions.AllowAny()]
 
 
-class TruckStopViewSet(viewsets.ModelViewSet):
-    queryset = TruckStop.objects.all()
-    serializer_class = TruckStopSerializer
-    authentication_classes = []  # No authentication required
-    permission_classes = [permissions.AllowAny]  # Public access
 
-    @action(detail=False, methods=['get'])
-    def nearby(self, request):
-        try:
-            lat = float(request.query_params.get('lat'))
-            lng = float(request.query_params.get('lng'))
-        except (TypeError, ValueError):
-            return Response({"error": "Valid 'lat' and 'lng' query parameters are required."}, status=400)
-
-        unit = request.query_params.get('unit', 'miles').lower()
-        user_location = Point(lng, lat, srid=4326)
-
-        queryset = TruckStop.objects.annotate(
-            distance=Distance('location', user_location)
-        ).order_by('distance')
-
-        for stop in queryset:
-            stop.distance_miles = round(stop.distance.mi, 2)
-            stop.distance_km = round(stop.distance.km, 2)
-
-        serializer = self.get_serializer(
-            queryset,
-            many=True,
-            context={'request': request, 'user_location': user_location, 'unit': unit}
-        )
-        return Response(serializer.data)
-
-
-class WeatherDataViewSet(viewsets.ModelViewSet):
-    queryset = WeatherData.objects.all()
-    serializer_class = WeatherDataSerializer
-    authentication_classes = []  # No authentication required
-    permission_classes = [permissions.AllowAny]
-
-
-class TruckStopReviewViewSet(viewsets.ModelViewSet):
-    queryset = TruckStopReview.objects.all()
-    serializer_class = TruckStopReviewSerializer
-    authentication_classes = []  # No authentication required
-    permission_classes = [permissions.AllowAny]

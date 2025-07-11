@@ -1,6 +1,5 @@
 from django.db import models
 from django.contrib.auth.models import User
-from django.contrib.gis.db import models as gis_models
 from django.core.validators import RegexValidator
 from django.core.exceptions import ValidationError
 import re
@@ -28,62 +27,62 @@ class ContactSubmission(models.Model):
     def __str__(self):
         return f"{self.contact_id} - {self.first_name} {self.last_name}"
 
-class TruckStop(models.Model):
-    name = models.CharField(max_length=200)
-    address = models.CharField(max_length=500)
-    latitude = models.FloatField()
-    longitude = models.FloatField()
-    location = gis_models.PointField(geography=True, null=True, blank=True)  # NEW FIELD
-    parking_spaces = models.IntegerField()
-    available_spaces = models.IntegerField()
-    last_updated = models.DateTimeField(auto_now=True)
-    # objects = GeoManager() # this line enables .annotate(Distance(...)) for spatial features
+# class TruckStop(models.Model):
+#     name = models.CharField(max_length=200)
+#     address = models.CharField(max_length=500)
+#     latitude = models.FloatField()
+#     longitude = models.FloatField()
+#     location = gis_models.PointField(geography=True, null=True, blank=True)  # NEW FIELD
+#     parking_spaces = models.IntegerField()
+#     available_spaces = models.IntegerField()
+#     last_updated = models.DateTimeField(auto_now=True)
+#     # objects = GeoManager() # this line enables .annotate(Distance(...)) for spatial features
 
-    def save(self, *args, **kwargs):
-        # Automatically set location from lat/lng
-        if self.latitude and self.longitude:
-            self.location = gis_models.Point(self.longitude, self.latitude)
-        super().save(*args, **kwargs)
+#     def save(self, *args, **kwargs):
+#         # Automatically set location from lat/lng
+#         if self.latitude and self.longitude:
+#             self.location = gis_models.Point(self.longitude, self.latitude)
+#         super().save(*args, **kwargs)
     
-    # Amenities
-    has_showers = models.BooleanField(default=False)
-    has_restaurant = models.BooleanField(default=False)
-    has_repair_shop = models.BooleanField(default=False)
-    has_fuel = models.BooleanField(default=False)
+#     # Amenities
+#     has_showers = models.BooleanField(default=False)
+#     has_restaurant = models.BooleanField(default=False)
+#     has_repair_shop = models.BooleanField(default=False)
+#     has_fuel = models.BooleanField(default=False)
     
-    # Ratings (averages)
-    cleanliness_rating = models.FloatField(default=0)
-    food_rating = models.FloatField(default=0)
-    safety_rating = models.FloatField(default=0)
+#     # Ratings (averages)
+#     cleanliness_rating = models.FloatField(default=0)
+#     food_rating = models.FloatField(default=0)
+#     safety_rating = models.FloatField(default=0)
 
-    def __str__(self):
-        return self.name
+#     def __str__(self):
+#         return self.name
 
-class WeatherData(models.Model):
-    truck_stop = models.ForeignKey(TruckStop, on_delete=models.CASCADE, related_name='weather_data')
-    temperature = models.FloatField()
-    conditions = models.CharField(max_length=100)
-    wind_speed = models.FloatField()
-    precipitation = models.FloatField()
-    timestamp = models.DateTimeField(auto_now_add=True)
+# class WeatherData(models.Model):
+#     truck_stop = models.ForeignKey(TruckStop, on_delete=models.CASCADE, related_name='weather_data')
+#     temperature = models.FloatField()
+#     conditions = models.CharField(max_length=100)
+#     wind_speed = models.FloatField()
+#     precipitation = models.FloatField()
+#     timestamp = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self):
-        return f"Weather at {self.truck_stop.name} - {self.timestamp}"
+#     def __str__(self):
+#         return f"Weather at {self.truck_stop.name} - {self.timestamp}"
 
-class TruckStopReview(models.Model):
-    truck_stop = models.ForeignKey(TruckStop, on_delete=models.CASCADE, related_name='reviews')
-    cleanliness_rating = models.IntegerField(choices=[(i, i) for i in range(1, 6)])
-    food_rating = models.IntegerField(choices=[(i, i) for i in range(1, 6)])
-    safety_rating = models.IntegerField(choices=[(i, i) for i in range(1, 6)])
-    parking_availability = models.CharField(
-        max_length=20,
-        choices=[('full', 'Full'), ('limited', 'Limited'), ('available', 'Available')]
-    )
-    comment = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+# class TruckStopReview(models.Model):
+#     truck_stop = models.ForeignKey(TruckStop, on_delete=models.CASCADE, related_name='reviews')
+#     cleanliness_rating = models.IntegerField(choices=[(i, i) for i in range(1, 6)])
+#     food_rating = models.IntegerField(choices=[(i, i) for i in range(1, 6)])
+#     safety_rating = models.IntegerField(choices=[(i, i) for i in range(1, 6)])
+#     parking_availability = models.CharField(
+#         max_length=20,
+#         choices=[('full', 'Full'), ('limited', 'Limited'), ('available', 'Available')]
+#     )
+#     comment = models.TextField(blank=True)
+#     created_at = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self):
-        return f"Review for {self.truck_stop.name} - {self.created_at}"
+#     def __str__(self):
+#         return f"Review for {self.truck_stop.name} - {self.created_at}"
 
 class ContactUs(models.Model):
     contact_id = models.CharField(max_length=10, unique=True, editable=False, blank=True)
