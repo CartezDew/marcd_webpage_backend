@@ -6,12 +6,7 @@ from rest_framework.permissions import IsAdminUser
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.filters import SearchFilter
 from rest_framework import viewsets, permissions
-from rest_framework.decorators import action
 
-from django.contrib.gis.geos import Point
-from django.contrib.gis.db.models.functions import Distance
-from django.views.generic import TemplateView
-from django.shortcuts import render, redirect
 
 from .models import (
     ContactUs
