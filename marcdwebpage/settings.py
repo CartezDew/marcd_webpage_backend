@@ -37,6 +37,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "https://www.marc-d.com",
     "https://www.marc-d.org",
+    "https://marc-d.com",
+    "https://marc-d.org",
 ]
 
 ROOT_URLCONF = 'marcdwebpage.urls'
