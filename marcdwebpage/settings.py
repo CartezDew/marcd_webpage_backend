@@ -79,11 +79,12 @@ WSGI_APPLICATION = 'marcdwebpage.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('PGDATABASE', 'marcd_db'),
-        'USER': os.environ.get('PGUSER', 'marcd_user'),
-        'PASSWORD': os.environ.get('PGPASSWORD', 'marcd_password'),
-        'HOST': os.environ.get('PGHOST', 'localhost'),
-        'PORT': os.environ.get('PGPORT', '5432'),
+        'NAME': os.getenv('PGDATABASE', 'marcd_db'),
+        'USER': os.getenv('PGUSER', 'marcd_user'),
+        'PASSWORD': os.getenv('PGPASSWORD', 'marcd_password'),
+        'HOST': os.getenv('PGHOST', 'localhost'),
+        'PORT': os.getenv('PGPORT', '5432'),
+
     }
 }
 
