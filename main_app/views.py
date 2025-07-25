@@ -9,10 +9,12 @@ from rest_framework import viewsets, permissions
 
 
 from .models import (
-    ContactUs
+    ContactUs,
+    WaitlistEntry
 )
 from .serializers import (
-    ContactUsSerializer
+    ContactUsSerializer,
+    WaitlistEntrySerializer
 )
 
 
@@ -34,6 +36,47 @@ class FeaturesView(APIView):
                 {"title": "Cleanliness & Food Reviews", "description": "Know what to expect before stopping."},
             ]
         })
+
+
+class WaitlistView(APIView):
+    authentication_classes = []  # No authentication required
+    permission_classes = [permissions.AllowAny]  # Public access
+    
+    def post(self, request):
+        serializer = WaitlistEntrySerializer(data=request.data)
+        if serializer.is_valid():
+            try:
+                serializer.save()
+                return Response({
+                    "message": "Successfully added to waitlist!",
+                    "email": serializer.data['email']
+                }, status=status.HTTP_201_CREATED)
+            except Exception as e:
+                return Response({
+                    "error": "Failed to add to waitlist. Please try again."
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class WaitlistListView(ListAPIView):
+    queryset = WaitlistEntry.objects.all()
+    serializer_class = WaitlistEntrySerializer
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAdminUser]
+    filter_backends = [SearchFilter]
+    search_fields = ['email', 'created_at']
+
+
+class WaitlistEntryViewSet(viewsets.ModelViewSet):
+    queryset = WaitlistEntry.objects.all()
+    serializer_class = WaitlistEntrySerializer
+    authentication_classes = [TokenAuthentication]
+    lookup_field = 'id'
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve', 'update', 'partial_update', 'destroy']:
+            return [permissions.IsAdminUser()]
+        return [permissions.AllowAny()]
 
 
 class ContactView(APIView):
