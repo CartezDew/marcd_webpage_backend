@@ -3,6 +3,23 @@ from .models import ContactUs, WaitlistEntry
 
 # Register your models here.
 
+@admin.register(ContactUs)
+class ContactUsAdmin(admin.ModelAdmin):
+    list_display = ['contact_id', 'first_name', 'last_name', 'email', 'feedback_type', 'created_at', 'is_read']
+    list_filter = ['feedback_type', 'created_at', 'is_read']
+    search_fields = ['first_name', 'last_name', 'email', 'message']
+    readonly_fields = ['contact_id', 'created_at']
+    ordering = ['-created_at']
+    
+    def has_add_permission(self, request):
+        return True
+    
+    def has_change_permission(self, request, obj=None):
+        return True
+    
+    def has_delete_permission(self, request, obj=None):
+        return True
+
 @admin.register(WaitlistEntry)
 class WaitlistEntryAdmin(admin.ModelAdmin):
     list_display = ['email', 'created_at']

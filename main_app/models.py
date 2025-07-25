@@ -6,7 +6,7 @@ import re
 
 
 class WaitlistEntry(models.Model):
-    email = models.EmailField(unique=True)
+    email = models.EmailField()
     created_at = models.DateTimeField(auto_now_add=True)
     
     def clean(self):
