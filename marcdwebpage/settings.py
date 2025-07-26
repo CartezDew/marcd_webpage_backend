@@ -40,11 +40,41 @@ CORS_ALLOWED_ORIGINS = [
     "https://www.marc-d.org",
     "https://marc-d.com",
     "https://marc-d.org",
+    # Add any additional domains your frontend might be hosted on
 ]
+
+# For development, you might want to allow all origins
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
 
 # Additional CORS settings for development
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only in development
+
+# Additional CORS settings for mobile compatibility
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# Allow credentials and handle preflight requests
+CORS_EXPOSE_HEADERS = ['content-type', 'authorization']
 
 ROOT_URLCONF = 'marcdwebpage.urls'
 

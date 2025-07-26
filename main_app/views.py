@@ -16,6 +16,7 @@ from django.core.files.base import ContentFile
 from django.db.models import Q
 from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank
 from rest_framework.exceptions import ValidationError
+from django.conf import settings
 import os
 import mimetypes
 
@@ -45,14 +46,27 @@ from .serializers import (
 class CustomTokenObtainPairView(TokenObtainPairView):
     """
     Custom JWT login view that accepts either username or email
+    Handles multiple field names for better frontend compatibility
     """
     def post(self, request, *args, **kwargs):
-        username_or_email = request.data.get('username', '')
+        # Handle multiple possible field names for username/email
+        username_or_email = (
+            request.data.get('username') or 
+            request.data.get('email') or 
+            request.data.get('user') or 
+            ''
+        )
         password = request.data.get('password', '')
+        
+        # Log the request data for debugging (remove in production)
+        if settings.DEBUG:
+            print(f"Login attempt - Data received: {request.data}")
+            print(f"Username/Email extracted: {username_or_email}")
         
         if not username_or_email or not password:
             return Response({
-                'error': 'Both username/email and password are required'
+                'error': 'Both username/email and password are required',
+                'received_data': list(request.data.keys()) if settings.DEBUG else None
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Try to authenticate with username first
@@ -76,7 +90,8 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         
         if user is None:
             return Response({
-                'error': 'Invalid credentials. Please check your username/email and password.'
+                'error': 'Invalid credentials. Please check your username/email and password.',
+                'hint': 'Make sure you are using the correct username/email and password combination.'
             }, status=status.HTTP_401_UNAUTHORIZED)
         
         if not user.is_active:

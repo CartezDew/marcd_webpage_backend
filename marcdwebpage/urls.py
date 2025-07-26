@@ -26,6 +26,7 @@ urlpatterns = [
     path('', include('main_app.urls')),
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('login/', CustomTokenObtainPairView.as_view(), name='login'),  # Alias for frontend compatibility
 ]
 
 # Serve media files in development
