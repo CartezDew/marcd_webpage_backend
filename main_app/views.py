@@ -320,12 +320,27 @@ class ContactListView(ListAPIView):
 class ContactUsViewSet(viewsets.ModelViewSet):
     queryset = ContactUs.objects.all()
     serializer_class = ContactUsSerializer
-    lookup_field = 'contact_id'
+    lookup_field = 'id'
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'update', 'partial_update', 'destroy']:
-            return [permissions.IsAdminUser()]
+            return [permissions.IsAuthenticated()]
         return [permissions.AllowAny()]
+
+    def partial_update(self, request, *args, **kwargs):
+        """Custom partial_update method with debugging"""
+        instance = self.get_object()
+        print(f"Updating contact {instance.id} with data: {request.data}")
+        print(f"Current is_read value: {instance.is_read}")
+        
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated_instance = serializer.save()
+            print(f"Updated is_read value: {updated_instance.is_read}")
+            return Response(serializer.data)
+        else:
+            print(f"Serializer errors: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class FileViewSet(viewsets.ModelViewSet):

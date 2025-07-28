@@ -147,7 +147,7 @@ class ContactUsSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContactUs
         fields = ['id', 'contact_id', 'first_name', 'last_name', 'email', 'social_media', 'phone', 'feedback_type', 'message', 'created_at', 'is_read']
-        read_only_fields = ['id', 'contact_id', 'created_at', 'is_read']
+        read_only_fields = ['id', 'contact_id', 'created_at']
 
     def validate_phone(self, value):
         if value:
@@ -176,7 +176,12 @@ class ContactUsSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, data):
-        # Ensure required fields are present
+        # Only validate required fields if they are being updated
+        # For partial updates (like updating is_read), skip required field validation
+        if self.partial:
+            return data
+            
+        # Ensure required fields are present for full updates
         if not data.get('first_name'):
             raise serializers.ValidationError("First name is required")
         if not data.get('last_name'):

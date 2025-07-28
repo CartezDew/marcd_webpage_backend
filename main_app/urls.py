@@ -39,7 +39,7 @@ urlpatterns = [
         'delete': 'destroy'
     }), name='waitlist-entries-detail'),
     path('contactus/', ContactUsViewSet.as_view({'get': 'list', 'post': 'create'}), name='contactus-list'),
-    path('contactus/<str:contact_id>/', ContactUsViewSet.as_view({
+    path('contactus/<int:id>/', ContactUsViewSet.as_view({
         'get': 'retrieve',
         'put': 'update',
         'patch': 'partial_update',
