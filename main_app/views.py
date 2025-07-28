@@ -7,18 +7,55 @@ from rest_framework.authentication import TokenAuthentication
 from rest_framework.filters import SearchFilter
 from rest_framework import viewsets, permissions
 from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.http import HttpResponse, Http404
 from django.shortcuts import get_object_or_404
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.db.models import Q
 from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank
 from rest_framework.exceptions import ValidationError
 from django.conf import settings
+from django.utils import timezone
+from django.core.cache import cache
+from django.views.decorators.cache import cache_page
+from django.utils.decorators import method_decorator
 import os
 import mimetypes
+
+
+def rate_limit(key_prefix, limit=100, period=3600):
+    """
+    Rate limiting decorator
+    key_prefix: prefix for cache key
+    limit: maximum requests per period
+    period: time period in seconds
+    """
+    def decorator(view_func):
+        def wrapper(self, request, *args, **kwargs):
+            # Create cache key based on user and action
+            user_id = request.user.id if request.user.is_authenticated else 'anonymous'
+            cache_key = f"{key_prefix}:{user_id}"
+            
+            # Get current count
+            current_count = cache.get(cache_key, 0)
+            
+            if current_count >= limit:
+                return Response(
+                    {'error': 'Rate limit exceeded. Please try again later.'},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS
+                )
+            
+            # Increment count
+            cache.set(cache_key, current_count + 1, period)
+            
+            return view_func(self, request, *args, **kwargs)
+        return wrapper
+    return decorator
 
 
 from .models import (
@@ -43,79 +80,161 @@ from .serializers import (
 )
 
 
-class CustomTokenObtainPairView(TokenObtainPairView):
+@method_decorator(csrf_exempt, name='dispatch')
+class CustomTokenObtainPairView(APIView):
     """
     Custom JWT login view that accepts either username or email
     Handles multiple field names for better frontend compatibility
     """
+    authentication_classes = []
+    permission_classes = []
+    
+    @csrf_exempt
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+    
     def post(self, request, *args, **kwargs):
-        # Handle multiple possible field names for username/email
-        username_or_email = (
-            request.data.get('username') or 
-            request.data.get('email') or 
-            request.data.get('user') or 
-            ''
-        )
-        password = request.data.get('password', '')
-        
-        # Log the request data for debugging (remove in production)
-        if settings.DEBUG:
-            print(f"Login attempt - Data received: {request.data}")
-            print(f"Username/Email extracted: {username_or_email}")
-        
-        if not username_or_email or not password:
-            return Response({
-                'error': 'Both username/email and password are required',
-                'received_data': list(request.data.keys()) if settings.DEBUG else None
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Try to authenticate with username first
-        user = authenticate(username=username_or_email, password=password)
-        
-        # If that fails, try to find user by email and authenticate
-        if user is None:
-            try:
-                user_obj = User.objects.get(email=username_or_email)
-                user = authenticate(username=user_obj.username, password=password)
-            except User.DoesNotExist:
-                user = None
-            except User.MultipleObjectsReturned:
-                # If multiple users have the same email, try the first one
+        try:
+            # Parse request data from multiple sources
+            data = {}
+            
+            # Try request.data first (DRF parsed data)
+            if hasattr(request, 'data') and request.data:
+                data = request.data
+            # Fallback to request.POST for form data
+            elif hasattr(request, 'POST') and request.POST:
+                data = request.POST
+            # Last resort: parse JSON from request.body
+            else:
                 try:
-                    user_obj = User.objects.filter(email=username_or_email).first()
-                    if user_obj:
-                        user = authenticate(username=user_obj.username, password=password)
-                except:
+                    import json
+                    if hasattr(request, 'body') and request.body:
+                        data = json.loads(request.body.decode('utf-8'))
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    data = {}
+            
+            # Handle multiple possible field names for username/email
+            username_or_email = (
+                data.get('username') or 
+                data.get('email') or 
+                data.get('user') or 
+                data.get('login') or
+                data.get('identifier') or
+                ''
+            )
+            password = data.get('password', '')
+            
+            # Log the request data for debugging
+            if settings.DEBUG:
+                print(f"CustomTokenObtainPairView - Login attempt")
+                print(f"Request method: {request.method}")
+                print(f"Content type: {request.content_type}")
+                print(f"Data keys: {list(data.keys()) if data else 'No data'}")
+                print(f"Username/Email extracted: '{username_or_email}'")
+                print(f"Password provided: {'Yes' if password else 'No'}")
+            
+            if not username_or_email or not password:
+                return Response({
+                    'error': 'Both username/email and password are required',
+                    'received_data': list(data.keys()) if settings.DEBUG and data else None,
+                    'debug_info': {
+                        'content_type': request.content_type,
+                        'method': request.method,
+                        'has_data': bool(data)
+                    } if settings.DEBUG else None
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Try to authenticate with username first
+            user = authenticate(username=username_or_email, password=password)
+            
+            # If that fails, try to find user by email and authenticate
+            if user is None:
+                try:
+                    user_obj = User.objects.get(email=username_or_email)
+                    user = authenticate(username=user_obj.username, password=password)
+                except User.DoesNotExist:
                     user = None
-        
-        if user is None:
+                except User.MultipleObjectsReturned:
+                    # If multiple users have the same email, try the first one
+                    try:
+                        user_obj = User.objects.filter(email=username_or_email).first()
+                        if user_obj:
+                            user = authenticate(username=user_obj.username, password=password)
+                    except:
+                        user = None
+            
+            if user is None:
+                return Response({
+                    'error': 'Invalid credentials. Please check your username/email and password.',
+                    'hint': 'Make sure you are using the correct username/email and password combination.'
+                }, status=status.HTTP_401_UNAUTHORIZED)
+            
+            if not user.is_active:
+                return Response({
+                    'error': 'Account is disabled.'
+                }, status=status.HTTP_401_UNAUTHORIZED)
+            
+            # Generate JWT tokens
+            from rest_framework_simplejwt.tokens import RefreshToken
+            refresh = RefreshToken.for_user(user)
+            access = refresh.access_token
+            
             return Response({
-                'error': 'Invalid credentials. Please check your username/email and password.',
-                'hint': 'Make sure you are using the correct username/email and password combination.'
-            }, status=status.HTTP_401_UNAUTHORIZED)
-        
-        if not user.is_active:
+                'refresh': str(refresh),
+                'access': str(access),
+                'user': {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'is_staff': user.is_staff,
+                    'is_superuser': user.is_superuser,
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            # Log the full error for debugging
+            if settings.DEBUG:
+                print(f"CustomTokenObtainPairView error: {str(e)}")
+                import traceback
+                print(f"Traceback: {traceback.format_exc()}")
+            
             return Response({
-                'error': 'Account is disabled.'
-            }, status=status.HTTP_401_UNAUTHORIZED)
-        
-        # Generate JWT tokens
-        from rest_framework_simplejwt.tokens import RefreshToken
-        refresh = RefreshToken.for_user(user)
-        access = refresh.access_token
-        
+                'error': 'An unexpected error occurred during authentication.',
+                'detail': str(e) if settings.DEBUG else 'Please try again later.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class MobileLoginTestView(APIView):
+    """
+    Debug view to test mobile login requests
+    """
+    authentication_classes = []
+    permission_classes = []
+    
+    @csrf_exempt
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+    
+    def post(self, request, *args, **kwargs):
         return Response({
-            'refresh': str(refresh),
-            'access': str(access),
-            'user': {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'is_staff': user.is_staff,
-                'is_superuser': user.is_superuser,
-            }
+            'message': 'Test endpoint reached successfully',
+            'method': request.method,
+            'content_type': request.content_type,
+            'headers': dict(request.headers),
+            'data': request.data if hasattr(request, 'data') else None,
+            'post': dict(request.POST) if hasattr(request, 'POST') else None,
+            'body': request.body.decode('utf-8') if hasattr(request, 'body') and request.body else None,
+            'user_agent': request.META.get('HTTP_USER_AGENT', 'Unknown'),
+            'remote_addr': request.META.get('REMOTE_ADDR', 'Unknown'),
+        }, status=status.HTTP_200_OK)
+    
+    def get(self, request, *args, **kwargs):
+        return Response({
+            'message': 'Test GET endpoint works',
+            'timestamp': str(timezone.now()) if hasattr(timezone, 'now') else 'timestamp unavailable'
         }, status=status.HTTP_200_OK)
 
 
@@ -212,9 +331,11 @@ class ContactUsViewSet(viewsets.ModelViewSet):
 class FileViewSet(viewsets.ModelViewSet):
     queryset = File.objects.all()
     serializer_class = FileSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
     filter_backends = [SearchFilter]
     search_fields = ['name', 'file_type', 'uploaded_by__username']
+    lookup_field = 'pk'
     
     def perform_create(self, serializer):
         serializer.save(uploaded_by=self.request.user)
@@ -282,13 +403,30 @@ class FileViewSet(viewsets.ModelViewSet):
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    def destroy(self, request, *args, **kwargs):
+        """Custom destroy method with better error handling"""
+        try:
+            instance = self.get_object()
+            # Delete the file from storage
+            if instance.file:
+                try:
+                    default_storage.delete(instance.file.name)
+                except Exception:
+                    pass  # Continue even if file deletion fails
+            instance.delete()
+            return Response({'message': 'File deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            return Response({'error': f'Server error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class FolderViewSet(viewsets.ModelViewSet):
     queryset = Folder.objects.all()
     serializer_class = FolderSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
     filter_backends = [SearchFilter]
     search_fields = ['name', 'created_by__username']
+    lookup_field = 'pk'
     
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -333,51 +471,87 @@ class FolderViewSet(viewsets.ModelViewSet):
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    def destroy(self, request, *args, **kwargs):
+        """Custom destroy method with better error handling"""
+        try:
+            instance = self.get_object()
+            self.perform_destroy(instance)
+            return Response({'message': 'Folder deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': f'Server error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     def perform_destroy(self, instance):
         """Recursively delete all contents of a folder, then the folder itself"""
-        self._delete_folder_contents(instance)
-        instance.delete()
+        try:
+            self._delete_folder_contents(instance)
+            instance.delete()
+        except Exception as e:
+            # Log the error for debugging
+            print(f"Error deleting folder {instance.id}: {str(e)}")
+            raise ValidationError(f"The folder may contain files or there is a backend issue: {str(e)}")
 
     def _delete_folder_contents(self, folder):
-        # Delete all files in this folder
-        for file_obj in folder.files.all():
-            # Delete file versions
-            for version in file_obj.versions.all():
-                if version.version_file:
+        """Recursively delete all contents of a folder"""
+        try:
+            # Delete all files in this folder
+            for file_obj in folder.files.all():
+                try:
+                    # Delete file versions
+                    for version in file_obj.versions.all():
+                        if version.version_file:
+                            try:
+                                default_storage.delete(version.version_file.name)
+                            except Exception:
+                                pass
+                        version.delete()
+                    
+                    # Delete file permissions
+                    file_obj.permissions.all().delete()
+                    
+                    # Delete file preview
                     try:
-                        default_storage.delete(version.version_file.name)
+                        if hasattr(file_obj, 'preview') and file_obj.preview:
+                            if file_obj.preview.thumbnail:
+                                try:
+                                    default_storage.delete(file_obj.preview.thumbnail.name)
+                                except Exception:
+                                    pass
+                            file_obj.preview.delete()
                     except Exception:
                         pass
-                version.delete()
-            # Delete file permissions
-            file_obj.permissions.all().delete()
-            # Delete file preview
-            try:
-                if hasattr(file_obj, 'preview') and file_obj.preview:
-                    if file_obj.preview.thumbnail:
+                    
+                    # Delete the file itself
+                    if file_obj.file:
                         try:
-                            default_storage.delete(file_obj.preview.thumbnail.name)
+                            default_storage.delete(file_obj.file.name)
                         except Exception:
                             pass
-                    file_obj.preview.delete()
-            except Exception:
-                pass
-            # Delete the file itself
-            if file_obj.file:
+                    file_obj.delete()
+                except Exception as e:
+                    print(f"Error deleting file {file_obj.id}: {str(e)}")
+                    raise
+            
+            # Recursively delete all subfolders
+            for subfolder in folder.children.all():
                 try:
-                    default_storage.delete(file_obj.file.name)
-                except Exception:
-                    pass
-            file_obj.delete()
-        # Recursively delete all subfolders
-        for subfolder in folder.children.all():
-            self._delete_folder_contents(subfolder)
-            subfolder.delete()
+                    self._delete_folder_contents(subfolder)
+                    subfolder.delete()
+                except Exception as e:
+                    print(f"Error deleting subfolder {subfolder.id}: {str(e)}")
+                    raise
+                    
+        except Exception as e:
+            print(f"Error in _delete_folder_contents for folder {folder.id}: {str(e)}")
+            raise
 
 
 class FileUploadView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
     
+    @rate_limit('file_upload', limit=50, period=3600)  # 50 uploads per hour
     def post(self, request):
         try:
             uploaded_file = request.FILES.get('file')
@@ -418,11 +592,13 @@ class FileUploadView(APIView):
 
 
 class FileDownloadView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
     
-    def get(self, request, id):
+    @rate_limit('file_download', limit=200, period=3600)  # 200 downloads per hour
+    def get(self, request, pk):
         try:
-            file_obj = get_object_or_404(File, id=id)
+            file_obj = get_object_or_404(File, id=pk)
             
             if not file_obj.file:
                 return Response({'error': 'File not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -451,11 +627,11 @@ class FileDownloadView(APIView):
 
 
 class FileMoveView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
     
-    def post(self, request, id):
+    def post(self, request, pk):
         try:
-            file_obj = get_object_or_404(File, id=id)
+            file_obj = get_object_or_404(File, id=pk)
             target_folder_id = request.data.get('target_folder')
             
             # Get target folder if specified
@@ -482,11 +658,11 @@ class FileMoveView(APIView):
 
 
 class FolderMoveView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
     
-    def post(self, request, id):
+    def post(self, request, pk):
         try:
-            folder_obj = get_object_or_404(Folder, id=id)
+            folder_obj = get_object_or_404(Folder, id=pk)
             target_parent_id = request.data.get('target_parent')
             
             # Get target parent folder if specified
@@ -518,7 +694,7 @@ class FolderMoveView(APIView):
 class FileTagViewSet(viewsets.ModelViewSet):
     queryset = FileTag.objects.all()
     serializer_class = FileTagSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
     filter_backends = [SearchFilter]
     search_fields = ['name']
     
@@ -529,7 +705,7 @@ class FileTagViewSet(viewsets.ModelViewSet):
 class FileVersionViewSet(viewsets.ModelViewSet):
     queryset = FileVersion.objects.all()
     serializer_class = FileVersionSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
     
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -538,7 +714,7 @@ class FileVersionViewSet(viewsets.ModelViewSet):
 class FilePermissionViewSet(viewsets.ModelViewSet):
     queryset = FilePermission.objects.all()
     serializer_class = FilePermissionSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
     
     def perform_create(self, serializer):
         serializer.save(granted_by=self.request.user)
@@ -547,11 +723,11 @@ class FilePermissionViewSet(viewsets.ModelViewSet):
 class FilePreviewViewSet(viewsets.ModelViewSet):
     queryset = FilePreview.objects.all()
     serializer_class = FilePreviewSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
 
 
 class FileSearchView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
         query = request.query_params.get('q', '')
@@ -572,7 +748,7 @@ class FileSearchView(APIView):
 
 
 class FileVersionUploadView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
     
     def post(self, request, file_id):
         try:
@@ -604,7 +780,7 @@ class FileVersionUploadView(APIView):
 
 
 class FileVersionDownloadView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request, file_id, version_number):
         try:
@@ -637,7 +813,7 @@ class FileVersionDownloadView(APIView):
 
 
 class FilePermissionGrantView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
     
     def post(self, request, file_id):
         try:
@@ -679,7 +855,7 @@ class FilePermissionGrantView(APIView):
 
 
 class FileByTagView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
         tag_ids = request.query_params.getlist('tags')
@@ -696,15 +872,31 @@ class TestAuthView(APIView):
     
     def get(self, request):
         return Response({
-            "message": "Authentication successful!",
-            "user": {
-                'id': request.user.id,
-                'username': request.user.username,
-                'email': request.user.email,
-                'is_staff': request.user.is_staff,
-                'is_superuser': request.user.is_superuser,
-            }
+            'message': 'Authentication successful',
+            'user': request.user.username,
+            'user_id': request.user.id
         })
+
+class TestFileOperationsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        """Test endpoint to check file and folder operations"""
+        try:
+            # Test folder operations
+            folders_count = Folder.objects.count()
+            files_count = File.objects.count()
+            
+            return Response({
+                'message': 'File operations test successful',
+                'folders_count': folders_count,
+                'files_count': files_count,
+                'user': request.user.username
+            })
+        except Exception as e:
+            return Response({
+                'error': f'File operations test failed: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
