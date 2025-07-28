@@ -931,9 +931,12 @@ class FileDuplicateView(APIView):
                 file_size=original_file.file_size,
                 uploaded_by=request.user,
                 folder=original_file.folder,
-                description=original_file.description,
-                tags=original_file.tags.all() if original_file.tags.exists() else None
+                description=original_file.description
             )
+            
+            # Copy tags separately (many-to-many relationship)
+            if original_file.tags.exists():
+                new_file.tags.set(original_file.tags.all())
             
             serializer = FileSerializer(new_file)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -949,34 +952,48 @@ class FolderDuplicateView(APIView):
     def post(self, request, pk):
         """Duplicate a folder"""
         try:
+            print(f"Starting folder duplication for pk={pk}")
             original_folder = get_object_or_404(Folder, pk=pk)
+            print(f"Found original folder: {original_folder.name}")
             
             # Create a copy of the folder
             new_folder = Folder.objects.create(
                 name=f"{original_folder.name} (Copy)",
                 description=original_folder.description,
                 created_by=request.user,
-                parent_folder=original_folder.parent_folder
+                parent=original_folder.parent
             )
+            print(f"Created new folder: {new_folder.name}")
             
             # Copy files from original folder to new folder
             files_in_original = File.objects.filter(folder=original_folder)
+            print(f"Found {files_in_original.count()} files to copy")
+            
             for file_obj in files_in_original:
-                File.objects.create(
+                print(f"Copying file: {file_obj.name}")
+                new_file = File.objects.create(
                     name=file_obj.name,
                     file=file_obj.file,
                     file_type=file_obj.file_type,
                     file_size=file_obj.file_size,
                     uploaded_by=request.user,
                     folder=new_folder,
-                    description=file_obj.description,
-                    tags=file_obj.tags.all() if file_obj.tags.exists() else None
+                    description=file_obj.description
                 )
+                
+                # Copy tags separately (many-to-many relationship)
+                if file_obj.tags.exists():
+                    print(f"Copying tags for file: {file_obj.name}")
+                    new_file.tags.set(file_obj.tags.all())
             
             serializer = FolderSerializer(new_folder)
+            print(f"Folder duplication completed successfully")
             return Response(serializer.data, status=status.HTTP_201_CREATED)
             
         except Exception as e:
+            print(f"Error duplicating folder: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
