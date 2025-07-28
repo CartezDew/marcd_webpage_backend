@@ -23,6 +23,8 @@ from .views import (
     FilePermissionGrantView,
     FileByTagView,
     TestAuthView,
+    FileDuplicateView,
+    FolderDuplicateView,
 )
 
 urlpatterns = [
@@ -60,6 +62,7 @@ urlpatterns = [
     }), name='file-detail'),
     path('api/files/<int:pk>/move/', FileMoveView.as_view(), name='file-move'),
     path('api/files/<int:pk>/download/', FileDownloadView.as_view(), name='file-download'),
+    path('api/files/<int:pk>/duplicate/', FileDuplicateView.as_view(), name='file-duplicate'),
     path('api/files/search/', FileSearchView.as_view(), name='file-search'),
     path('api/files/by-tags/', FileByTagView.as_view(), name='files-by-tags'),
     
@@ -81,6 +84,7 @@ urlpatterns = [
         'delete': 'destroy'
     }), name='folders-detail'),
     path('api/folders/<int:pk>/move/', FolderMoveView.as_view(), name='folder-move'),
+    path('api/folders/<int:pk>/duplicate/', FolderDuplicateView.as_view(), name='folder-duplicate'),
     
     # File tags routes
     path('api/tags/', FileTagViewSet.as_view({'get': 'list', 'post': 'create'}), name='tags-list'),

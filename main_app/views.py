@@ -914,4 +914,70 @@ class TestFileOperationsView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class FileDuplicateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    
+    def post(self, request, pk):
+        """Duplicate a file"""
+        try:
+            original_file = get_object_or_404(File, pk=pk)
+            
+            # Create a copy of the file
+            new_file = File.objects.create(
+                name=f"{original_file.name} (Copy)",
+                file=original_file.file,
+                file_type=original_file.file_type,
+                file_size=original_file.file_size,
+                uploaded_by=request.user,
+                folder=original_file.folder,
+                description=original_file.description,
+                tags=original_file.tags.all() if original_file.tags.exists() else None
+            )
+            
+            serializer = FileSerializer(new_file)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class FolderDuplicateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    
+    def post(self, request, pk):
+        """Duplicate a folder"""
+        try:
+            original_folder = get_object_or_404(Folder, pk=pk)
+            
+            # Create a copy of the folder
+            new_folder = Folder.objects.create(
+                name=f"{original_folder.name} (Copy)",
+                description=original_folder.description,
+                created_by=request.user,
+                parent_folder=original_folder.parent_folder
+            )
+            
+            # Copy files from original folder to new folder
+            files_in_original = File.objects.filter(folder=original_folder)
+            for file_obj in files_in_original:
+                File.objects.create(
+                    name=file_obj.name,
+                    file=file_obj.file,
+                    file_type=file_obj.file_type,
+                    file_size=file_obj.file_size,
+                    uploaded_by=request.user,
+                    folder=new_folder,
+                    description=file_obj.description,
+                    tags=file_obj.tags.all() if file_obj.tags.exists() else None
+                )
+            
+            serializer = FolderSerializer(new_folder)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 
