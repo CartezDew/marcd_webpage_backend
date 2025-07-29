@@ -1025,15 +1025,20 @@ class FolderDownloadView(APIView):
         """Download a folder as a ZIP file containing all its contents"""
         try:
             folder = get_object_or_404(Folder, pk=pk)
+            print(f"Starting download for folder: {folder.name} (ID: {folder.id})")
             
             # Create a temporary ZIP file
-            with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_zip:
-                with zipfile.ZipFile(temp_zip.name, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                    # Add all files in the folder to the ZIP
-                    files_in_folder = File.objects.filter(folder=folder)
-                    
-                    for file_obj in files_in_folder:
-                        if file_obj.file and default_storage.exists(file_obj.file.name):
+            temp_zip_path = tempfile.mktemp(suffix='.zip')
+            
+            with zipfile.ZipFile(temp_zip_path, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                # Add all files in the current folder to the ZIP
+                files_in_folder = File.objects.filter(folder=folder)
+                print(f"Found {files_in_folder.count()} files in folder {folder.name}")
+                
+                for file_obj in files_in_folder:
+                    print(f"Processing file: {file_obj.name}")
+                    if file_obj.file:
+                        if default_storage.exists(file_obj.file.name):
                             try:
                                 # Read file content
                                 with default_storage.open(file_obj.file.name, 'rb') as f:
@@ -1041,24 +1046,36 @@ class FolderDownloadView(APIView):
                                 
                                 # Add to ZIP with the file name
                                 zip_file.writestr(file_obj.name, file_content)
+                                print(f"Added file to ZIP: {file_obj.name}")
                             except Exception as e:
                                 print(f"Error adding file {file_obj.name} to ZIP: {e}")
                                 continue
-                    
-                    # Recursively add files from subfolders
-                    self._add_subfolder_contents(zip_file, folder, folder.name)
+                        else:
+                            print(f"File not found in storage: {file_obj.name} (path: {file_obj.file.name})")
+                            # Create a placeholder file in the ZIP to indicate the missing file
+                            placeholder_content = f"File '{file_obj.name}' was not found in storage.\nThis file may have been deleted or the upload failed.\nOriginal path: {file_obj.file.name}\nFile size in database: {file_obj.get_file_size_display()}"
+                            zip_file.writestr(f"MISSING_{file_obj.name}.txt", placeholder_content)
+                    else:
+                        print(f"File object has no file field: {file_obj.name}")
                 
-                # Return the ZIP file as a download
-                response = FileResponse(
-                    open(temp_zip.name, 'rb'),
-                    content_type='application/zip'
-                )
-                response['Content-Disposition'] = f'attachment; filename="{folder.name}.zip"'
-                
-                # Clean up the temporary file after sending
-                os.unlink(temp_zip.name)
-                
-                return response
+                # Recursively add files from subfolders
+                self._add_subfolder_contents(zip_file, folder, folder.name)
+            
+            # Read the ZIP file content
+            with open(temp_zip_path, 'rb') as zip_file:
+                zip_content = zip_file.read()
+            
+            # Clean up the temporary file
+            os.unlink(temp_zip_path)
+            
+            print(f"ZIP file created successfully. Size: {len(zip_content)} bytes")
+            
+            # Create response with proper headers
+            response = HttpResponse(zip_content, content_type='application/zip')
+            response['Content-Disposition'] = f'attachment; filename="{folder.name}.zip"'
+            response['Content-Length'] = len(zip_content)
+            
+            return response
                 
         except Exception as e:
             print(f"Error downloading folder: {str(e)}")
@@ -1068,20 +1085,28 @@ class FolderDownloadView(APIView):
     
     def _add_subfolder_contents(self, zip_file, folder, base_path):
         """Recursively add contents of subfolders to the ZIP"""
+        print(f"Checking subfolders for: {folder.name}")
         for subfolder in folder.children.all():
             subfolder_path = f"{base_path}/{subfolder.name}"
+            print(f"Processing subfolder: {subfolder.name} at path: {subfolder_path}")
             
             # Add files in this subfolder
             files_in_subfolder = File.objects.filter(folder=subfolder)
+            print(f"Found {files_in_subfolder.count()} files in subfolder {subfolder.name}")
+            
             for file_obj in files_in_subfolder:
+                print(f"Processing subfolder file: {file_obj.name}")
                 if file_obj.file and default_storage.exists(file_obj.file.name):
                     try:
                         with default_storage.open(file_obj.file.name, 'rb') as f:
                             file_content = f.read()
                         zip_file.writestr(f"{subfolder_path}/{file_obj.name}", file_content)
+                        print(f"Added subfolder file to ZIP: {subfolder_path}/{file_obj.name}")
                     except Exception as e:
-                        print(f"Error adding file {file_obj.name} to ZIP: {e}")
+                        print(f"Error adding subfolder file {file_obj.name} to ZIP: {e}")
                         continue
+                else:
+                    print(f"Subfolder file not found: {file_obj.name}")
             
             # Recursively add subfolders
             self._add_subfolder_contents(zip_file, subfolder, subfolder_path)
