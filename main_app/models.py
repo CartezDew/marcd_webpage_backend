@@ -95,13 +95,17 @@ class File(models.Model):
         # Set file size and type before saving
         if self.file:
             try:
-                # Only update file size if the file actually exists
-                if hasattr(self.file, 'storage') and self.file.storage.exists(self.file.name):
-                    self.file_size = self.file.size
                 # Always update file type from the filename
                 self.file_type = os.path.splitext(self.file.name)[1].lower()
-            except (OSError, IOError):
-                # If file doesn't exist, keep the existing file_size
+                
+                # Try to get file size - this should work for newly uploaded files
+                if hasattr(self.file, 'size'):
+                    self.file_size = self.file.size
+                # Fallback: check if file exists in storage
+                elif hasattr(self.file, 'storage') and self.file.storage.exists(self.file.name):
+                    self.file_size = self.file.size
+            except (OSError, IOError, AttributeError):
+                # If file doesn't exist or can't be accessed, keep the existing file_size
                 pass
         super().save(*args, **kwargs)
     
