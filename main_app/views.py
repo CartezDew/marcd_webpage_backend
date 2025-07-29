@@ -1,12 +1,11 @@
+from django.views import View
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAdminUser
 from rest_framework.authentication import TokenAuthentication
-from rest_framework.filters import SearchFilter
 from rest_framework import viewsets, permissions
-from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
@@ -18,7 +17,7 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.db.models import Q
 from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank
-from rest_framework.exceptions import ValidationError
+from django.core.exceptions import ValidationError
 from django.conf import settings
 from django.utils import timezone
 from django.core.cache import cache
@@ -282,7 +281,7 @@ class WaitlistListView(ListAPIView):
     queryset = WaitlistEntry.objects.all()
     serializer_class = WaitlistEntrySerializer
     permission_classes = [IsAdminUser]
-    filter_backends = [SearchFilter]
+    # filter_backends = [SearchFilter]
     search_fields = ['email', 'created_at']
 
 
@@ -313,7 +312,7 @@ class ContactListView(ListAPIView):
     queryset = ContactUs.objects.all()
     serializer_class = ContactUsSerializer
     permission_classes = [IsAdminUser]
-    filter_backends = [SearchFilter]
+    # filter_backends = [SearchFilter]
     search_fields = ['id', 'contact_id', 'first_name', 'last_name', 'email', 'feedback_type', 'message']
 
 
@@ -348,7 +347,7 @@ class FileViewSet(viewsets.ModelViewSet):
     serializer_class = FileSerializer
     permission_classes = [permissions.IsAuthenticated]
     authentication_classes = [JWTAuthentication]
-    filter_backends = [SearchFilter]
+    # filter_backends = [SearchFilter]
     search_fields = ['name', 'file_type', 'uploaded_by__username']
     lookup_field = 'pk'
     
@@ -367,56 +366,74 @@ class FileViewSet(viewsets.ModelViewSet):
     
     def partial_update(self, request, *args, **kwargs):
         """Handle PATCH requests for updating file properties including moving files"""
-        instance = self.get_object()
-        
-        # Check if this is a move operation
-        if 'folder' in request.data:
-            target_folder_id = request.data.get('folder')
+        try:
+            print(f"FileViewSet partial_update called with data: {request.data}")
+            instance = self.get_object()
+            print(f"File instance: {instance.name}, current folder: {instance.folder}")
             
-            # Get target folder if specified
-            target_folder = None
-            if target_folder_id:
-                try:
-                    target_folder = Folder.objects.get(id=target_folder_id)
-                except Folder.DoesNotExist:
-                    return Response({'error': 'Target folder not found'}, status=status.HTTP_404_NOT_FOUND)
+            # Check if this is a move operation
+            if 'folder' in request.data:
+                target_folder_id = request.data.get('folder')
+                print(f"Moving file to folder ID: {target_folder_id}")
+                
+                # Get target folder if specified
+                target_folder = None
+                if target_folder_id:
+                    try:
+                        target_folder = Folder.objects.get(id=target_folder_id)
+                        print(f"Found target folder: {target_folder.name}")
+                    except Folder.DoesNotExist:
+                        print(f"Target folder {target_folder_id} not found")
+                        return Response({'error': 'Target folder not found'}, status=status.HTTP_404_NOT_FOUND)
+                
+                # Check if file with same name exists in target folder
+                if File.objects.filter(name=instance.name, folder=target_folder).exclude(id=instance.id).exists():
+                    print(f"File with same name already exists in target folder")
+                    return Response({'error': 'A file with this name already exists in the target folder'}, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Move file
+                instance.folder = target_folder
+                instance.save()
+                print(f"File moved successfully to folder: {target_folder.name if target_folder else 'root'}")
+                
+                serializer = self.get_serializer(instance)
+                return Response(serializer.data, status=status.HTTP_200_OK)
             
-            # Check if file with same name exists in target folder
-            if File.objects.filter(name=instance.name, folder=target_folder).exclude(id=instance.id).exists():
-                return Response({'error': 'A file with this name already exists in the target folder'}, status=status.HTTP_400_BAD_REQUEST)
+            # Check if this is a rename operation
+            if 'name' in request.data:
+                new_name = request.data.get('name')
+                print(f"Renaming file to: {new_name}")
+                
+                # Validate new name
+                if not new_name or new_name.strip() == '':
+                    return Response({'error': 'File name cannot be empty'}, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Check if file with same name exists in the same folder
+                if File.objects.filter(name=new_name, folder=instance.folder).exclude(id=instance.id).exists():
+                    return Response({'error': 'A file with this name already exists in this folder'}, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Update name
+                instance.name = new_name
+                instance.save()
+                
+                serializer = self.get_serializer(instance)
+                return Response(serializer.data, status=status.HTTP_200_OK)
             
-            # Move file
-            instance.folder = target_folder
-            instance.save()
-            
-            serializer = self.get_serializer(instance)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        
-        # Check if this is a rename operation
-        if 'name' in request.data:
-            new_name = request.data.get('name')
-            
-            # Validate new name
-            if not new_name or new_name.strip() == '':
-                return Response({'error': 'File name cannot be empty'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Check if file with same name exists in the same folder
-            if File.objects.filter(name=new_name, folder=instance.folder).exclude(id=instance.id).exists():
-                return Response({'error': 'A file with this name already exists in this folder'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Update name
-            instance.name = new_name
-            instance.save()
-            
-            serializer = self.get_serializer(instance)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        
-        # Handle other partial updates (description, tags, is_public, etc.)
-        serializer = self.get_serializer(instance, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            # Handle other partial updates (description, tags, is_public, etc.)
+            print(f"Handling other partial updates")
+            serializer = self.get_serializer(instance, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            else:
+                print(f"Serializer errors: {serializer.errors}")
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            print(f"Error in FileViewSet partial_update: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response({'error': f'Server error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def destroy(self, request, *args, **kwargs):
         """Custom destroy method with better error handling"""
@@ -439,7 +456,7 @@ class FolderViewSet(viewsets.ModelViewSet):
     serializer_class = FolderSerializer
     permission_classes = [permissions.IsAuthenticated]
     authentication_classes = [JWTAuthentication]
-    filter_backends = [SearchFilter]
+    # filter_backends = [SearchFilter]
     search_fields = ['name', 'created_by__username']
     lookup_field = 'pk'
     
@@ -710,7 +727,7 @@ class FileTagViewSet(viewsets.ModelViewSet):
     queryset = FileTag.objects.all()
     serializer_class = FileTagSerializer
     permission_classes = [permissions.IsAuthenticated]
-    filter_backends = [SearchFilter]
+    # filter_backends = [SearchFilter]
     search_fields = ['name']
     
     def perform_create(self, serializer):

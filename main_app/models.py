@@ -94,8 +94,15 @@ class File(models.Model):
     def save(self, *args, **kwargs):
         # Set file size and type before saving
         if self.file:
-            self.file_size = self.file.size
-            self.file_type = os.path.splitext(self.file.name)[1].lower()
+            try:
+                # Only update file size if the file actually exists
+                if hasattr(self.file, 'storage') and self.file.storage.exists(self.file.name):
+                    self.file_size = self.file.size
+                # Always update file type from the filename
+                self.file_type = os.path.splitext(self.file.name)[1].lower()
+            except (OSError, IOError):
+                # If file doesn't exist, keep the existing file_size
+                pass
         super().save(*args, **kwargs)
     
     def get_full_path(self):
