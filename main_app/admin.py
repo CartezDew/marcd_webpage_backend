@@ -40,7 +40,7 @@ class WaitlistEntryAdmin(admin.ModelAdmin):
 class FileInline(admin.TabularInline):
     model = File
     extra = 0
-    readonly_fields = ['uploaded_at', 'file_size', 'file_type', 'version_count']
+    readonly_fields = ['uploaded_at', 'file_size', 'file_type']
     fields = ['name', 'file', 'uploaded_by', 'file_size_display', 'file_type', 'uploaded_at', 'is_public']
     
     def file_size_display(self, obj):
