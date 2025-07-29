@@ -13,6 +13,7 @@ from .views import (
     FileDownloadView,
     FileMoveView,
     FolderMoveView,
+    FolderDownloadView,
     FileTagViewSet,
     FileVersionViewSet,
     FilePermissionViewSet,
@@ -85,6 +86,7 @@ urlpatterns = [
     }), name='folders-detail'),
     path('api/folders/<int:pk>/move/', FolderMoveView.as_view(), name='folder-move'),
     path('api/folders/<int:pk>/duplicate/', FolderDuplicateView.as_view(), name='folder-duplicate'),
+    path('api/folders/<int:pk>/download/', FolderDownloadView.as_view(), name='folder-download'),
     
     # File tags routes
     path('api/tags/', FileTagViewSet.as_view({'get': 'list', 'post': 'create'}), name='tags-list'),

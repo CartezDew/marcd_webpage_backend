@@ -25,6 +25,9 @@ from django.views.decorators.cache import cache_page
 from django.utils.decorators import method_decorator
 import os
 import mimetypes
+import zipfile
+import tempfile
+from django.http import FileResponse
 
 
 def rate_limit(key_prefix, limit=100, period=3600):
@@ -1012,6 +1015,76 @@ class FolderDuplicateView(APIView):
             import traceback
             traceback.print_exc()
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class FolderDownloadView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    
+    def get(self, request, pk):
+        """Download a folder as a ZIP file containing all its contents"""
+        try:
+            folder = get_object_or_404(Folder, pk=pk)
+            
+            # Create a temporary ZIP file
+            with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_zip:
+                with zipfile.ZipFile(temp_zip.name, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                    # Add all files in the folder to the ZIP
+                    files_in_folder = File.objects.filter(folder=folder)
+                    
+                    for file_obj in files_in_folder:
+                        if file_obj.file and default_storage.exists(file_obj.file.name):
+                            try:
+                                # Read file content
+                                with default_storage.open(file_obj.file.name, 'rb') as f:
+                                    file_content = f.read()
+                                
+                                # Add to ZIP with the file name
+                                zip_file.writestr(file_obj.name, file_content)
+                            except Exception as e:
+                                print(f"Error adding file {file_obj.name} to ZIP: {e}")
+                                continue
+                    
+                    # Recursively add files from subfolders
+                    self._add_subfolder_contents(zip_file, folder, folder.name)
+                
+                # Return the ZIP file as a download
+                response = FileResponse(
+                    open(temp_zip.name, 'rb'),
+                    content_type='application/zip'
+                )
+                response['Content-Disposition'] = f'attachment; filename="{folder.name}.zip"'
+                
+                # Clean up the temporary file after sending
+                os.unlink(temp_zip.name)
+                
+                return response
+                
+        except Exception as e:
+            print(f"Error downloading folder: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _add_subfolder_contents(self, zip_file, folder, base_path):
+        """Recursively add contents of subfolders to the ZIP"""
+        for subfolder in folder.children.all():
+            subfolder_path = f"{base_path}/{subfolder.name}"
+            
+            # Add files in this subfolder
+            files_in_subfolder = File.objects.filter(folder=subfolder)
+            for file_obj in files_in_subfolder:
+                if file_obj.file and default_storage.exists(file_obj.file.name):
+                    try:
+                        with default_storage.open(file_obj.file.name, 'rb') as f:
+                            file_content = f.read()
+                        zip_file.writestr(f"{subfolder_path}/{file_obj.name}", file_content)
+                    except Exception as e:
+                        print(f"Error adding file {file_obj.name} to ZIP: {e}")
+                        continue
+            
+            # Recursively add subfolders
+            self._add_subfolder_contents(zip_file, subfolder, subfolder_path)
 
 
 
