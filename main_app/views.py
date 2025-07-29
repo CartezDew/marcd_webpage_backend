@@ -592,6 +592,30 @@ class FileUploadView(APIView):
             uploaded_file = request.FILES.get('file')
             folder_id = request.data.get('folder')
             custom_name = request.data.get('name')
+            # Handle boolean parameters that might come as strings
+            replace_existing_raw = request.data.get('replace_existing', False)
+            upload_as_duplicate_raw = request.data.get('upload_as_duplicate', False)
+            overwrite_raw = request.data.get('overwrite', False)
+            
+            # Convert to boolean
+            replace_existing = replace_existing_raw in [True, 'true', 'True', '1', 1]
+            upload_as_duplicate = upload_as_duplicate_raw in [True, 'true', 'True', '1', 1]
+            overwrite = overwrite_raw in [True, 'true', 'True', '1', 1]
+            
+            # If overwrite is true, treat it as replace_existing
+            if overwrite:
+                replace_existing = True
+            
+            # Debug logging
+            print(f"DEBUG: Upload request received")
+            print(f"DEBUG: folder_id = {folder_id} (type: {type(folder_id)})")
+            print(f"DEBUG: replace_existing_raw = {replace_existing_raw} (type: {type(replace_existing_raw)})")
+            print(f"DEBUG: replace_existing = {replace_existing}")
+            print(f"DEBUG: upload_as_duplicate_raw = {upload_as_duplicate_raw} (type: {type(upload_as_duplicate_raw)})")
+            print(f"DEBUG: upload_as_duplicate = {upload_as_duplicate}")
+            print(f"DEBUG: overwrite_raw = {overwrite_raw} (type: {type(overwrite_raw)})")
+            print(f"DEBUG: overwrite = {overwrite}")
+            print(f"DEBUG: All request.data = {request.data}")
             
             if not uploaded_file:
                 return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
@@ -607,11 +631,58 @@ class FileUploadView(APIView):
             # Use custom name if provided, otherwise use original filename
             file_name = custom_name if custom_name else uploaded_file.name
             
-            # Check if file with same name exists in the folder
-            if File.objects.filter(name=file_name, folder=folder).exists():
-                return Response({'error': 'A file with this name already exists in this folder'}, status=status.HTTP_400_BAD_REQUEST)
+            # Check if file with same name exists in the specific folder
+            existing_file = File.objects.filter(name=file_name, folder=folder).first()
             
-            # Create file object
+            if existing_file:
+                if replace_existing:
+                    # Delete the existing file from storage
+                    if existing_file.file and default_storage.exists(existing_file.file.name):
+                        default_storage.delete(existing_file.file.name)
+                    
+                    # Update the existing file record
+                    existing_file.file = uploaded_file
+                    existing_file.file_size = uploaded_file.size
+                    existing_file.file_type = os.path.splitext(uploaded_file.name)[1].lower()
+                    existing_file.uploaded_by = request.user
+                    existing_file.uploaded_at = timezone.now()
+                    existing_file.save()
+                    
+                    serializer = FileSerializer(existing_file)
+                    return Response(serializer.data, status=status.HTTP_200_OK)
+                    
+                elif upload_as_duplicate:
+                    # Generate a unique name with numbered suffix
+                    base_name, extension = os.path.splitext(file_name)
+                    counter = 1
+                    new_name = f"{base_name} ({counter}){extension}"
+                    
+                    while File.objects.filter(name=new_name, folder=folder).exists():
+                        counter += 1
+                        new_name = f"{base_name} ({counter}){extension}"
+                    
+                    # Create new file object with the unique name
+                    file_obj = File.objects.create(
+                        name=new_name,
+                        file=uploaded_file,
+                        folder=folder,
+                        uploaded_by=request.user
+                    )
+                    
+                    serializer = FileSerializer(file_obj)
+                    return Response(serializer.data, status=status.HTTP_201_CREATED)
+                    
+                else:
+                    # Return error with options
+                    return Response({
+                        'error': 'A file with this name already exists in this folder',
+                        'options': {
+                            'replace_existing': True,
+                            'upload_as_duplicate': True
+                        }
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Create new file object (no conflict)
             file_obj = File.objects.create(
                 name=file_name,
                 file=uploaded_file,
@@ -943,9 +1014,18 @@ class FileDuplicateView(APIView):
         try:
             original_file = get_object_or_404(File, pk=pk)
             
-            # Create a copy of the file
+            # Create a copy of the file with proper extension handling
+            base_name, extension = os.path.splitext(original_file.name)
+            duplicate_name = f"{base_name} (Copy){extension}"
+            
+            # Ensure the duplicate name is unique
+            counter = 1
+            while File.objects.filter(name=duplicate_name, folder=original_file.folder).exists():
+                counter += 1
+                duplicate_name = f"{base_name} (Copy {counter}){extension}"
+            
             new_file = File.objects.create(
-                name=f"{original_file.name} (Copy)",
+                name=duplicate_name,
                 file=original_file.file,
                 file_type=original_file.file_type,
                 file_size=original_file.file_size,
@@ -976,9 +1056,17 @@ class FolderDuplicateView(APIView):
             original_folder = get_object_or_404(Folder, pk=pk)
             print(f"Found original folder: {original_folder.name}")
             
-            # Create a copy of the folder
+            # Create a copy of the folder with unique naming
+            duplicate_name = f"{original_folder.name} (Copy)"
+            
+            # Ensure the duplicate name is unique
+            counter = 1
+            while Folder.objects.filter(name=duplicate_name, parent=original_folder.parent).exists():
+                counter += 1
+                duplicate_name = f"{original_folder.name} (Copy {counter})"
+            
             new_folder = Folder.objects.create(
-                name=f"{original_folder.name} (Copy)",
+                name=duplicate_name,
                 description=original_folder.description,
                 created_by=request.user,
                 parent=original_folder.parent
