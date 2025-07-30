@@ -1,7 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError
 from .models import Folder, File, FileTag, FileVersion, FilePermission, FilePreview, WaitlistEntry, ContactSubmission, ContactUs, UserSecurityQuestions
 import re
 
@@ -21,25 +20,7 @@ class PasswordChangeSerializer(serializers.Serializer):
     new_password = serializers.CharField(required=True)
     
     def validate_new_password(self, value):
-        try:
-            validate_password(value)
-        except ValidationError as e:
-            # Convert Django validation errors to more user-friendly messages
-            error_messages = []
-            for error in e.error_list:
-                if 'too common' in str(error):
-                    error_messages.append('This password is too common. Please choose a more unique password.')
-                elif 'too short' in str(error):
-                    error_messages.append('Password must be at least 8 characters long.')
-                elif 'too similar' in str(error):
-                    error_messages.append('Password is too similar to your username or personal information.')
-                elif 'entirely numeric' in str(error):
-                    error_messages.append('Password cannot be entirely numeric.')
-                else:
-                    error_messages.append(str(error))
-            
-            if error_messages:
-                raise serializers.ValidationError(error_messages)
+        validate_password(value)
         return value
 
 
@@ -56,25 +37,8 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     new_password = serializers.CharField(required=True)
     
     def validate_new_password(self, value):
-        try:
-            validate_password(value)
-        except ValidationError as e:
-            # Convert Django validation errors to more user-friendly messages
-            error_messages = []
-            for error in e.error_list:
-                if 'too common' in str(error):
-                    error_messages.append('This password is too common. Please choose a more unique password.')
-                elif 'too short' in str(error):
-                    error_messages.append('Password must be at least 8 characters long.')
-                elif 'too similar' in str(error):
-                    error_messages.append('Password is too similar to your username or personal information.')
-                elif 'entirely numeric' in str(error):
-                    error_messages.append('Password cannot be entirely numeric.')
-                else:
-                    error_messages.append(str(error))
-            
-            if error_messages:
-                raise serializers.ValidationError(error_messages)
+        # Skip Django's password validation for password resets
+        # Users should be able to use simple passwords like "test1234"
         return value
 
 
@@ -103,25 +67,8 @@ class EmailPasswordResetConfirmSerializer(serializers.Serializer):
     new_password = serializers.CharField(required=True)
     
     def validate_new_password(self, value):
-        try:
-            validate_password(value)
-        except ValidationError as e:
-            # Convert Django validation errors to more user-friendly messages
-            error_messages = []
-            for error in e.error_list:
-                if 'too common' in str(error):
-                    error_messages.append('This password is too common. Please choose a more unique password.')
-                elif 'too short' in str(error):
-                    error_messages.append('Password must be at least 8 characters long.')
-                elif 'too similar' in str(error):
-                    error_messages.append('Password is too similar to your username or personal information.')
-                elif 'entirely numeric' in str(error):
-                    error_messages.append('Password cannot be entirely numeric.')
-                else:
-                    error_messages.append(str(error))
-            
-            if error_messages:
-                raise serializers.ValidationError(error_messages)
+        # Skip Django's password validation for password resets
+        # Users should be able to use simple passwords like "test1234"
         return value
 
 

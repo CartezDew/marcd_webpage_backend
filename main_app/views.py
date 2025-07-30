@@ -1315,7 +1315,7 @@ class PasswordResetConfirmView(APIView):
                 # If no security questions set up, that's okay - just verify professor's name
                 pass
             
-            # Set new password
+            # Set new password (skip Django's password validation for resets)
             user.set_password(new_password)
             user.save()
             
