@@ -1255,7 +1255,7 @@ class PasswordResetRequestView(APIView):
         serializer = PasswordResetRequestSerializer(data=request.data)
         if serializer.is_valid():
             username = serializer.validated_data['username']
-            security_answer = serializer.validated_data['security_answer']
+            security_answer = serializer.validated_data.get('security_answer', '')
             professor_lastname = serializer.validated_data['professor_last_name']
             
             try:
@@ -1263,20 +1263,22 @@ class PasswordResetRequestView(APIView):
             except User.DoesNotExist:
                 return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
             
-            # Check if user has security questions set up
-            try:
-                security_questions = user.security_questions
-            except UserSecurityQuestions.DoesNotExist:
-                return Response({'error': 'Security questions not set up for this user'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Verify security questions
-            if not security_questions.verify_security_answer(security_answer):
-                return Response({'error': 'Security answer is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            if not security_questions.verify_professor_lastname(professor_lastname):
+            # Verify professor's last name (always required)
+            if professor_lastname.lower() != 'williams':
                 return Response({'error': 'Professor last name is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
             
-            return Response({'message': 'Security questions verified successfully'}, status=status.HTTP_200_OK)
+            # Check if user has security questions set up (optional)
+            try:
+                security_questions = user.security_questions
+                if security_questions.security_answer:
+                    # If security questions exist, verify them
+                    if not security_questions.verify_security_answer(security_answer):
+                        return Response({'error': 'Security answer is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
+            except UserSecurityQuestions.DoesNotExist:
+                # If no security questions set up, that's okay - just verify professor's name
+                pass
+            
+            return Response({'message': 'Verification successful'}, status=status.HTTP_200_OK)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1289,7 +1291,7 @@ class PasswordResetConfirmView(APIView):
         serializer = PasswordResetConfirmSerializer(data=request.data)
         if serializer.is_valid():
             username = serializer.validated_data['username']
-            security_answer = serializer.validated_data['security_answer']
+            security_answer = serializer.validated_data.get('security_answer', '')
             professor_lastname = serializer.validated_data['professor_last_name']
             new_password = serializer.validated_data['new_password']
             
@@ -1298,18 +1300,20 @@ class PasswordResetConfirmView(APIView):
             except User.DoesNotExist:
                 return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
             
-            # Check if user has security questions set up
+            # Verify professor's last name (always required)
+            if professor_lastname.lower() != 'williams':
+                return Response({'error': 'Professor last name is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if user has security questions set up (optional)
             try:
                 security_questions = user.security_questions
+                if security_questions.security_answer:
+                    # If security questions exist, verify them
+                    if not security_questions.verify_security_answer(security_answer):
+                        return Response({'error': 'Security answer is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
             except UserSecurityQuestions.DoesNotExist:
-                return Response({'error': 'Security questions not set up for this user'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Verify security questions
-            if not security_questions.verify_security_answer(security_answer):
-                return Response({'error': 'Security answer is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            if not security_questions.verify_professor_lastname(professor_lastname):
-                return Response({'error': 'Professor last name is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
+                # If no security questions set up, that's okay - just verify professor's name
+                pass
             
             # Set new password
             user.set_password(new_password)
@@ -1334,7 +1338,7 @@ class SecurityQuestionsSetupView(APIView):
             if hasattr(user, 'security_questions'):
                 return Response({'error': 'Security questions already set up'}, status=status.HTTP_400_BAD_REQUEST)
             
-            # Create security questions
+            # Create security questions - professor_last_name is required
             security_questions = UserSecurityQuestions.objects.create(
                 user=user,
                 security_answer=serializer.validated_data['security_answer'],
@@ -1357,7 +1361,7 @@ class SecurityQuestionsUpdateView(APIView):
         if serializer.is_valid():
             user = request.user
             
-            # Get or create security questions
+            # Get or create security questions - professor_last_name is required
             security_questions, created = UserSecurityQuestions.objects.get_or_create(
                 user=user,
                 defaults={
