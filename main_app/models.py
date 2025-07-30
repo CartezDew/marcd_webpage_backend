@@ -247,6 +247,7 @@ class WaitlistEntry(models.Model):
 
 
 class ContactSubmission(models.Model):
+    entry_id = models.CharField(max_length=20, unique=True, editable=False, blank=True)
     contact_id = models.CharField(max_length=10, unique=True, editable=False, blank=True)
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
@@ -255,6 +256,16 @@ class ContactSubmission(models.Model):
     submitted_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
+        if not self.entry_id:
+            # Generate unique entry ID: CS-001, CS-002, etc.
+            last_entry = ContactSubmission.objects.order_by('-id').first()
+            if last_entry and last_entry.entry_id:
+                last_id_num = int(last_entry.entry_id.replace("CS-", ""))
+                new_id_num = last_id_num + 1
+            else:
+                new_id_num = 1
+            self.entry_id = f"CS-{new_id_num:03d}"  # CS-001, CS-002, etc.
+        
         if not self.contact_id:
             last_contact = ContactSubmission.objects.order_by('-id').first()
             if last_contact and last_contact.contact_id:
@@ -266,10 +277,11 @@ class ContactSubmission(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.contact_id} - {self.first_name} {self.last_name}"
+        return f"{self.entry_id} - {self.contact_id} - {self.first_name} {self.last_name}"
 
 
 class ContactUs(models.Model):
+    entry_id = models.CharField(max_length=20, unique=True, editable=False, blank=True)
     contact_id = models.CharField(max_length=10, unique=True, editable=False, blank=True)
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
@@ -300,6 +312,16 @@ class ContactUs(models.Model):
     is_read = models.BooleanField(default=False)
 
     def save(self, *args, **kwargs):
+        if not self.entry_id:
+            # Generate unique entry ID: CU-001, CU-002, etc.
+            last_entry = ContactUs.objects.order_by('-id').first()
+            if last_entry and last_entry.entry_id:
+                last_id_num = int(last_entry.entry_id.replace("CU-", ""))
+                new_id_num = last_id_num + 1
+            else:
+                new_id_num = 1
+            self.entry_id = f"CU-{new_id_num:03d}"  # CU-001, CU-002, etc.
+        
         if not self.contact_id:
             last_contact = ContactUs.objects.order_by('-id').first()
             if last_contact and last_contact.contact_id:
@@ -329,7 +351,7 @@ class ContactUs(models.Model):
             raise ValidationError({'email': 'Please enter a valid email address format'})
 
     def __str__(self):
-        return f"{self.contact_id} - {self.first_name} {self.last_name} - {self.feedback_type}"
+        return f"{self.entry_id} - {self.contact_id} - {self.first_name} {self.last_name} - {self.feedback_type}"
 
 
 class UserSecurityQuestions(models.Model):

@@ -209,11 +209,18 @@ class WaitlistEntrySerializer(serializers.ModelSerializer):
         return value
 
 
+class ContactSubmissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContactSubmission
+        fields = ['id', 'entry_id', 'contact_id', 'first_name', 'last_name', 'email', 'message', 'submitted_at']
+        read_only_fields = ['id', 'entry_id', 'contact_id', 'submitted_at']
+
+
 class ContactUsSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContactUs
-        fields = ['id', 'contact_id', 'first_name', 'last_name', 'email', 'social_media', 'phone', 'feedback_type', 'message', 'created_at', 'is_read']
-        read_only_fields = ['id', 'contact_id', 'created_at']
+        fields = ['id', 'entry_id', 'contact_id', 'first_name', 'last_name', 'email', 'social_media', 'phone', 'feedback_type', 'message', 'created_at', 'is_read']
+        read_only_fields = ['id', 'entry_id', 'contact_id', 'created_at']
 
     def validate_phone(self, value):
         if value:

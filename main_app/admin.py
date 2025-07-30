@@ -78,17 +78,17 @@ class WaitlistEntryAdmin(admin.ModelAdmin):
 
 
 class ContactSubmissionAdmin(admin.ModelAdmin):
-    list_display = ['contact_id', 'first_name', 'last_name', 'email', 'submitted_at']
+    list_display = ['entry_id', 'contact_id', 'first_name', 'last_name', 'email', 'submitted_at']
     list_filter = ['submitted_at']
-    search_fields = ['first_name', 'last_name', 'email', 'contact_id']
-    readonly_fields = ['contact_id', 'submitted_at']
+    search_fields = ['first_name', 'last_name', 'email', 'contact_id', 'entry_id']
+    readonly_fields = ['entry_id', 'contact_id', 'submitted_at']
 
 
 class ContactUsAdmin(admin.ModelAdmin):
-    list_display = ['contact_id', 'first_name', 'last_name', 'email', 'feedback_type', 'created_at', 'is_read']
+    list_display = ['entry_id', 'contact_id', 'first_name', 'last_name', 'email', 'feedback_type', 'created_at', 'is_read']
     list_filter = ['feedback_type', 'created_at', 'is_read']
-    search_fields = ['first_name', 'last_name', 'email', 'contact_id']
-    readonly_fields = ['contact_id', 'created_at']
+    search_fields = ['first_name', 'last_name', 'email', 'contact_id', 'entry_id']
+    readonly_fields = ['entry_id', 'contact_id', 'created_at']
 
 
 class UserSecurityQuestionsAdmin(admin.ModelAdmin):
