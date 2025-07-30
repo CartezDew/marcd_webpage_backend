@@ -7,6 +7,8 @@ from django.contrib.postgres.indexes import GinIndex
 import re
 import os
 import uuid
+import secrets
+from datetime import timedelta
 
 
 class Folder(models.Model):
@@ -317,3 +319,142 @@ class ContactUs(models.Model):
 
     def __str__(self):
         return f"{self.contact_id} - {self.first_name} {self.last_name} - {self.feedback_type}"
+
+
+class UserSecurityQuestions(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='security_questions')
+    security_answer = models.CharField(max_length=255, help_text="Answer to security question")
+    professor_last_name = models.CharField(max_length=100, help_text="Professor Rob's last name")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "User Security Questions"
+        verbose_name_plural = "User Security Questions"
+    
+    def __str__(self):
+        return f"Security questions for {self.user.username}"
+    
+    def verify_security_answer(self, answer):
+        """Verify the security answer (case-insensitive)"""
+        return self.security_answer.lower().strip() == answer.lower().strip()
+    
+    def verify_professor_lastname(self, lastname):
+        """Verify professor's last name (case-insensitive)"""
+        return self.professor_last_name.lower().strip() == lastname.lower().strip()
+
+
+class PasswordResetCode(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reset_codes')
+    code = models.CharField(max_length=6, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+    
+    class Meta:
+        verbose_name = "Password Reset Code"
+        verbose_name_plural = "Password Reset Codes"
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"Reset code for {self.user.username} - {self.code}"
+    
+    def is_expired(self):
+        """Check if the code has expired"""
+        from django.utils import timezone
+        return timezone.now() > self.expires_at
+    
+    def is_valid(self):
+        """Check if the code is valid (not expired and not used)"""
+        return not self.is_expired() and not self.is_used
+    
+    @classmethod
+    def generate_code(cls):
+        """Generate a random 6-digit code"""
+        return ''.join(secrets.choice('0123456789') for _ in range(6))
+    
+    @classmethod
+    def create_for_user(cls, user):
+        """Create a new reset code for a user"""
+        # Invalidate any existing codes for this user
+        cls.objects.filter(user=user, is_used=False).update(is_used=True)
+        
+        # Create new code
+        from django.utils import timezone
+        code = cls.generate_code()
+        expires_at = timezone.now() + timedelta(minutes=15)  # 15 minutes expiry
+        
+        return cls.objects.create(
+            user=user,
+            code=code,
+            expires_at=expires_at
+        )
+
+
+class AdminLoginLog(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='admin_logins')
+    login_time = models.DateTimeField(auto_now_add=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    success = models.BooleanField(default=True)
+    failure_reason = models.CharField(max_length=255, blank=True)
+    
+    class Meta:
+        verbose_name = "Admin Login Log"
+        verbose_name_plural = "Admin Login Logs"
+        ordering = ['-login_time']
+    
+    def __str__(self):
+        status = "SUCCESS" if self.success else f"FAILED: {self.failure_reason}"
+        return f"{self.user.username} - {self.login_time} - {status}"
+    
+    @classmethod
+    def log_successful_login(cls, user, request=None):
+        """Log a successful admin login"""
+        ip_address = None
+        user_agent = ""
+        
+        if request:
+            ip_address = cls.get_client_ip(request)
+            user_agent = request.META.get('HTTP_USER_AGENT', '')
+        
+        return cls.objects.create(
+            user=user,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            success=True
+        )
+    
+    @classmethod
+    def log_failed_login(cls, username, request=None, failure_reason=""):
+        """Log a failed admin login attempt"""
+        ip_address = None
+        user_agent = ""
+        
+        if request:
+            ip_address = cls.get_client_ip(request)
+            user_agent = request.META.get('HTTP_USER_AGENT', '')
+        
+        # Try to find the user, or create a placeholder entry
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            user = None
+        
+        return cls.objects.create(
+            user=user,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            success=False,
+            failure_reason=failure_reason
+        )
+    
+    @staticmethod
+    def get_client_ip(request):
+        """Extract client IP address from request"""
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip

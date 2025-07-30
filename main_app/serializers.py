@@ -1,6 +1,73 @@
 from rest_framework import serializers
-from .models import ContactUs, WaitlistEntry, File, Folder, FileTag, FileVersion, FilePermission, FilePreview
+from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from .models import Folder, File, FileTag, FileVersion, FilePermission, FilePreview, WaitlistEntry, ContactSubmission, ContactUs, UserSecurityQuestions
 import re
+
+
+class UserSecurityQuestionsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserSecurityQuestions
+        fields = ['security_answer', 'professor_last_name']
+        extra_kwargs = {
+            'security_answer': {'write_only': True},
+            'professor_last_name': {'write_only': True}
+        }
+
+
+class PasswordChangeSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True)
+    
+    def validate_new_password(self, value):
+        validate_password(value)
+        return value
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    username = serializers.CharField(required=True)
+    security_answer = serializers.CharField(required=True)
+    professor_last_name = serializers.CharField(required=True)
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    username = serializers.CharField(required=True)
+    security_answer = serializers.CharField(required=True)
+    professor_last_name = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True)
+    
+    def validate_new_password(self, value):
+        validate_password(value)
+        return value
+
+
+class SecurityQuestionsSetupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserSecurityQuestions
+        fields = ['security_answer', 'professor_last_name']
+        extra_kwargs = {
+            'security_answer': {'write_only': True},
+            'professor_last_name': {'write_only': True}
+        }
+
+
+class EmailPasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+
+
+class EmailPasswordResetVerifySerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    code = serializers.CharField(max_length=6, required=True)
+
+
+class EmailPasswordResetConfirmSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    code = serializers.CharField(max_length=6, required=True)
+    new_password = serializers.CharField(required=True)
+    
+    def validate_new_password(self, value):
+        validate_password(value)
+        return value
 
 
 class FileTagSerializer(serializers.ModelSerializer):

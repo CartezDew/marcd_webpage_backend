@@ -1,220 +1,141 @@
 from django.contrib import admin
-from .models import ContactUs, WaitlistEntry, File, Folder, FileTag, FileVersion, FilePermission, FilePreview
+from .models import Folder, File, FileTag, FileVersion, FilePermission, FilePreview, WaitlistEntry, ContactSubmission, ContactUs, UserSecurityQuestions, PasswordResetCode, AdminLoginLog
 
-# Register your models here.
 
-@admin.register(ContactUs)
-class ContactUsAdmin(admin.ModelAdmin):
-    list_display = ['contact_id', 'first_name', 'last_name', 'email', 'feedback_type', 'created_at', 'is_read']
-    list_filter = ['feedback_type', 'created_at', 'is_read']
-    search_fields = ['first_name', 'last_name', 'email', 'message']
-    readonly_fields = ['contact_id', 'created_at']
-    ordering = ['-created_at']
-    
-    def has_add_permission(self, request):
-        return True
-    
-    def has_change_permission(self, request, obj=None):
-        return True
-    
-    def has_delete_permission(self, request, obj=None):
-        return True
+class FileInline(admin.TabularInline):
+    model = File
+    readonly_fields = ['uploaded_at', 'file_size', 'file_type']
+    extra = 0
 
-@admin.register(WaitlistEntry)
+
+class FolderAdmin(admin.ModelAdmin):
+    list_display = ['name', 'parent', 'created_by', 'created_at', 'files_list']
+    list_filter = ['created_at', 'created_by']
+    search_fields = ['name', 'description']
+    readonly_fields = ['created_at', 'updated_at', 'files_list']
+    inlines = [FileInline]
+    
+    def files_list(self, obj):
+        files = obj.files.all()
+        if files:
+            return ', '.join([f.name for f in files[:5]])
+        return 'No files'
+    files_list.short_description = 'Files in folder'
+
+
+class FileAdmin(admin.ModelAdmin):
+    list_display = ['name', 'folder', 'uploaded_by', 'get_file_size_display', 'file_type', 'uploaded_at', 'file_exists']
+    list_filter = ['file_type', 'uploaded_at', 'folder', 'uploaded_by']
+    search_fields = ['name', 'description', 'uploaded_by__username']
+    readonly_fields = ['uploaded_at', 'file_exists']
+    
+    def get_file_size_display(self, obj):
+        return obj.get_file_size_display()
+    get_file_size_display.short_description = 'Size'
+    
+    def file_exists(self, obj):
+        if obj.file:
+            from django.core.files.storage import default_storage
+            return default_storage.exists(obj.file.name)
+        return False
+    file_exists.boolean = True
+    file_exists.short_description = 'File Exists'
+
+
+class FileTagAdmin(admin.ModelAdmin):
+    list_display = ['name', 'color', 'created_by', 'created_at']
+    list_filter = ['created_at', 'created_by']
+    search_fields = ['name']
+
+
+class FileVersionAdmin(admin.ModelAdmin):
+    list_display = ['file', 'version_number', 'created_by', 'created_at', 'get_file_size_display']
+    list_filter = ['created_at', 'created_by', 'file']
+    search_fields = ['file__name', 'change_description']
+    
+    def get_file_size_display(self, obj):
+        return obj.get_file_size_display()
+    get_file_size_display.short_description = 'Size'
+
+
+class FilePermissionAdmin(admin.ModelAdmin):
+    list_display = ['file', 'user', 'permission_type', 'granted_by', 'granted_at', 'is_expired']
+    list_filter = ['permission_type', 'granted_at', 'granted_by']
+    search_fields = ['file__name', 'user__username', 'granted_by__username']
+
+
+class FilePreviewAdmin(admin.ModelAdmin):
+    list_display = ['file', 'generated_at']
+    list_filter = ['generated_at']
+    search_fields = ['file__name']
+
+
 class WaitlistEntryAdmin(admin.ModelAdmin):
     list_display = ['email', 'created_at']
     list_filter = ['created_at']
     search_fields = ['email']
     readonly_fields = ['created_at']
-    ordering = ['-created_at']
+
+
+class ContactSubmissionAdmin(admin.ModelAdmin):
+    list_display = ['contact_id', 'first_name', 'last_name', 'email', 'submitted_at']
+    list_filter = ['submitted_at']
+    search_fields = ['first_name', 'last_name', 'email', 'contact_id']
+    readonly_fields = ['contact_id', 'submitted_at']
+
+
+class ContactUsAdmin(admin.ModelAdmin):
+    list_display = ['contact_id', 'first_name', 'last_name', 'email', 'feedback_type', 'created_at', 'is_read']
+    list_filter = ['feedback_type', 'created_at', 'is_read']
+    search_fields = ['first_name', 'last_name', 'email', 'contact_id']
+    readonly_fields = ['contact_id', 'created_at']
+
+
+class UserSecurityQuestionsAdmin(admin.ModelAdmin):
+    list_display = ['user', 'security_answer', 'professor_last_name', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['user__username', 'user__email']
+    readonly_fields = ['created_at', 'updated_at']
+
+
+class PasswordResetCodeAdmin(admin.ModelAdmin):
+    list_display = ['user', 'code', 'created_at', 'expires_at', 'is_used', 'is_valid']
+    list_filter = ['created_at', 'expires_at', 'is_used']
+    search_fields = ['user__username', 'user__email', 'code']
+    readonly_fields = ['created_at', 'expires_at', 'is_valid']
+    
+    def is_valid(self, obj):
+        return obj.is_valid()
+    is_valid.boolean = True
+    is_valid.short_description = 'Valid'
+
+
+class AdminLoginLogAdmin(admin.ModelAdmin):
+    list_display = ['user', 'login_time', 'ip_address', 'success', 'failure_reason']
+    list_filter = ['login_time', 'success', 'ip_address']
+    search_fields = ['user__username', 'ip_address', 'failure_reason']
+    readonly_fields = ['login_time', 'ip_address', 'user_agent', 'success', 'failure_reason']
+    ordering = ['-login_time']
     
     def has_add_permission(self, request):
-        return True
+        return False  # Prevent manual creation of log entries
     
     def has_change_permission(self, request, obj=None):
-        return True
+        return False  # Prevent editing of log entries
     
     def has_delete_permission(self, request, obj=None):
-        return True
+        return request.user.is_superuser  # Only superusers can delete logs
 
-class FileInline(admin.TabularInline):
-    model = File
-    extra = 0
-    readonly_fields = ['uploaded_at', 'file_size', 'file_type']
-    fields = ['name', 'file', 'uploaded_by', 'file_size_display', 'file_type', 'uploaded_at', 'is_public']
-    
-    def file_size_display(self, obj):
-        return obj.get_file_size_display()
-    file_size_display.short_description = 'Size'
-    
-    def has_add_permission(self, request, obj=None):
-        return True
-    
-    def has_change_permission(self, request, obj=None):
-        return True
-    
-    def has_delete_permission(self, request, obj=None):
-        return True
 
-@admin.register(Folder)
-class FolderAdmin(admin.ModelAdmin):
-    list_display = ['name', 'parent', 'created_by', 'created_at', 'children_count', 'files_count', 'files_list']
-    list_filter = ['created_at', 'created_by']
-    search_fields = ['name', 'created_by__username']
-    readonly_fields = ['created_at', 'updated_at', 'files_list']
-    ordering = ['name']
-    inlines = [FileInline]
-    
-    def children_count(self, obj):
-        return obj.children.count()
-    children_count.short_description = 'Subfolders'
-    
-    def files_count(self, obj):
-        return obj.files.count()
-    files_count.short_description = 'Files'
-    
-    def files_list(self, obj):
-        """Display a list of files in the folder"""
-        files = obj.files.all()[:5]  # Show first 5 files
-        if not files:
-            return "No files"
-        
-        file_list = []
-        for file in files:
-            file_list.append(f"{file.name} ({file.get_file_size_display()})")
-        
-        if obj.files.count() > 5:
-            file_list.append(f"... and {obj.files.count() - 5} more")
-        
-        return ", ".join(file_list)
-    files_list.short_description = 'Files in Folder'
-    
-    def has_add_permission(self, request):
-        return True
-    
-    def has_change_permission(self, request, obj=None):
-        return True
-    
-    def has_delete_permission(self, request, obj=None):
-        return True
-
-@admin.register(File)
-class FileAdmin(admin.ModelAdmin):
-    list_display = ['name', 'folder', 'uploaded_by', 'file_size_display', 'file_type', 'uploaded_at', 'version_count', 'is_public', 'file_exists']
-    list_filter = ['file_type', 'uploaded_at', 'uploaded_by', 'folder', 'is_public', 'tags']
-    search_fields = ['name', 'uploaded_by__username', 'folder__name', 'description']
-    readonly_fields = ['uploaded_at', 'file_size', 'file_type', 'version_count', 'file_exists']
-    filter_horizontal = ['tags']
-    ordering = ['name']
-    
-    def file_size_display(self, obj):
-        return obj.get_file_size_display()
-    file_size_display.short_description = 'Size'
-    
-    def version_count(self, obj):
-        return obj.get_version_count()
-    version_count.short_description = 'Versions'
-    
-    def file_exists(self, obj):
-        """Check if the file actually exists in storage"""
-        if obj.file:
-            from django.core.files.storage import default_storage
-            exists = default_storage.exists(obj.file.name)
-            return "✅ Yes" if exists else "❌ No"
-        return "❌ No file"
-    file_exists.short_description = 'File Exists'
-    
-    def has_add_permission(self, request):
-        return True
-    
-    def has_change_permission(self, request, obj=None):
-        return True
-    
-    def has_delete_permission(self, request, obj=None):
-        return True
-
-@admin.register(FileTag)
-class FileTagAdmin(admin.ModelAdmin):
-    list_display = ['name', 'color', 'created_by', 'files_count', 'created_at']
-    list_filter = ['created_at', 'created_by']
-    search_fields = ['name']
-    readonly_fields = ['created_at']
-    ordering = ['name']
-    
-    def files_count(self, obj):
-        return obj.files.count()
-    files_count.short_description = 'Files'
-    
-    def has_add_permission(self, request):
-        return True
-    
-    def has_change_permission(self, request, obj=None):
-        return True
-    
-    def has_delete_permission(self, request, obj=None):
-        return True
-
-@admin.register(FileVersion)
-class FileVersionAdmin(admin.ModelAdmin):
-    list_display = ['file', 'version_number', 'file_size_display', 'created_by', 'created_at']
-    list_filter = ['created_at', 'created_by']
-    search_fields = ['file__name', 'change_description']
-    readonly_fields = ['created_at', 'file_size']
-    ordering = ['-created_at']
-    
-    def file_size_display(self, obj):
-        size = obj.file_size
-        for unit in ['B', 'KB', 'MB', 'GB']:
-            if size < 1024.0:
-                return f"{size:.1f} {unit}"
-            size /= 1024.0
-        return f"{size:.1f} TB"
-    file_size_display.short_description = 'Size'
-    
-    def has_add_permission(self, request):
-        return True
-    
-    def has_change_permission(self, request, obj=None):
-        return True
-    
-    def has_delete_permission(self, request, obj=None):
-        return True
-
-@admin.register(FilePermission)
-class FilePermissionAdmin(admin.ModelAdmin):
-    list_display = ['file', 'user', 'permission_type', 'granted_by', 'granted_at', 'expires_at', 'is_expired']
-    list_filter = ['permission_type', 'granted_at', 'granted_by']
-    search_fields = ['file__name', 'user__username', 'granted_by__username']
-    readonly_fields = ['granted_at']
-    ordering = ['-granted_at']
-    
-    def is_expired(self, obj):
-        return obj.is_expired()
-    is_expired.boolean = True
-    is_expired.short_description = 'Expired'
-    
-    def has_add_permission(self, request):
-        return True
-    
-    def has_change_permission(self, request, obj=None):
-        return True
-    
-    def has_delete_permission(self, request, obj=None):
-        return True
-
-@admin.register(FilePreview)
-class FilePreviewAdmin(admin.ModelAdmin):
-    list_display = ['file', 'generated_at']
-    list_filter = ['generated_at']
-    search_fields = ['file__name']
-    readonly_fields = ['generated_at']
-    ordering = ['-generated_at']
-    
-    def has_add_permission(self, request):
-        return True
-    
-    def has_change_permission(self, request, obj=None):
-        return True
-    
-    def has_delete_permission(self, request, obj=None):
-        return True
+admin.site.register(Folder, FolderAdmin)
+admin.site.register(File, FileAdmin)
+admin.site.register(FileTag, FileTagAdmin)
+admin.site.register(FileVersion, FileVersionAdmin)
+admin.site.register(FilePermission, FilePermissionAdmin)
+admin.site.register(FilePreview, FilePreviewAdmin)
+admin.site.register(WaitlistEntry, WaitlistEntryAdmin)
+admin.site.register(ContactSubmission, ContactSubmissionAdmin)
+admin.site.register(ContactUs, ContactUsAdmin)
+admin.site.register(UserSecurityQuestions, UserSecurityQuestionsAdmin)
+admin.site.register(PasswordResetCode, PasswordResetCodeAdmin)
+admin.site.register(AdminLoginLog, AdminLoginLogAdmin)

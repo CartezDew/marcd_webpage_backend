@@ -68,7 +68,10 @@ from .models import (
     FileTag,
     FileVersion,
     FilePermission,
-    FilePreview
+    FilePreview,
+    UserSecurityQuestions,
+    PasswordResetCode,
+    AdminLoginLog
 )
 from .serializers import (
     ContactUsSerializer,
@@ -78,8 +81,27 @@ from .serializers import (
     FileTagSerializer,
     FileVersionSerializer,
     FilePermissionSerializer,
-    FilePreviewSerializer
+    FilePreviewSerializer,
+    UserSecurityQuestionsSerializer,
+    PasswordChangeSerializer,
+    PasswordResetRequestSerializer,
+    PasswordResetConfirmSerializer,
+    EmailPasswordResetRequestSerializer,
+    EmailPasswordResetVerifySerializer,
+    EmailPasswordResetConfirmSerializer
 )
+import json
+import os
+import zipfile
+import tempfile
+import mimetypes
+from functools import wraps
+from django.core.mail import send_mail
+from django.conf import settings
+from django.contrib.auth import authenticate, login as django_login
+from django.contrib.auth.forms import AuthenticationForm
+from django.shortcuts import render, redirect
+from django.contrib import messages
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -1198,6 +1220,407 @@ class FolderDownloadView(APIView):
             
             # Recursively add subfolders
             self._add_subfolder_contents(zip_file, subfolder, subfolder_path)
+
+
+class PasswordChangeView(APIView):
+    """Allow authenticated users to change their password"""
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    
+    def post(self, request):
+        serializer = PasswordChangeSerializer(data=request.data)
+        if serializer.is_valid():
+            user = request.user
+            old_password = serializer.validated_data['old_password']
+            new_password = serializer.validated_data['new_password']
+            
+            # Verify old password
+            if not user.check_password(old_password):
+                return Response({'error': 'Current password is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Set new password
+            user.set_password(new_password)
+            user.save()
+            
+            return Response({'message': 'Password changed successfully'}, status=status.HTTP_200_OK)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PasswordResetRequestView(APIView):
+    """Verify security questions for password reset"""
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        if serializer.is_valid():
+            username = serializer.validated_data['username']
+            security_answer = serializer.validated_data['security_answer']
+            professor_lastname = serializer.validated_data['professor_last_name']
+            
+            try:
+                user = User.objects.get(username=username)
+            except User.DoesNotExist:
+                return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            # Check if user has security questions set up
+            try:
+                security_questions = user.security_questions
+            except UserSecurityQuestions.DoesNotExist:
+                return Response({'error': 'Security questions not set up for this user'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Verify security questions
+            if not security_questions.verify_security_answer(security_answer):
+                return Response({'error': 'Security answer is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not security_questions.verify_professor_lastname(professor_lastname):
+                return Response({'error': 'Professor last name is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            return Response({'message': 'Security questions verified successfully'}, status=status.HTTP_200_OK)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PasswordResetConfirmView(APIView):
+    """Reset password after security questions verification"""
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        if serializer.is_valid():
+            username = serializer.validated_data['username']
+            security_answer = serializer.validated_data['security_answer']
+            professor_lastname = serializer.validated_data['professor_last_name']
+            new_password = serializer.validated_data['new_password']
+            
+            try:
+                user = User.objects.get(username=username)
+            except User.DoesNotExist:
+                return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            # Check if user has security questions set up
+            try:
+                security_questions = user.security_questions
+            except UserSecurityQuestions.DoesNotExist:
+                return Response({'error': 'Security questions not set up for this user'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Verify security questions
+            if not security_questions.verify_security_answer(security_answer):
+                return Response({'error': 'Security answer is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not security_questions.verify_professor_lastname(professor_lastname):
+                return Response({'error': 'Professor last name is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Set new password
+            user.set_password(new_password)
+            user.save()
+            
+            return Response({'message': 'Password reset successfully'}, status=status.HTTP_200_OK)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SecurityQuestionsSetupView(APIView):
+    """Allow users to set up security questions"""
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    
+    def post(self, request):
+        serializer = SecurityQuestionsSetupSerializer(data=request.data)
+        if serializer.is_valid():
+            user = request.user
+            
+            # Check if security questions already exist
+            if hasattr(user, 'security_questions'):
+                return Response({'error': 'Security questions already set up'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Create security questions
+            security_questions = UserSecurityQuestions.objects.create(
+                user=user,
+                security_answer=serializer.validated_data['security_answer'],
+                professor_last_name=serializer.validated_data['professor_last_name']
+            )
+            
+            response_serializer = UserSecurityQuestionsSerializer(security_questions)
+            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SecurityQuestionsUpdateView(APIView):
+    """Allow users to update their security questions"""
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    
+    def put(self, request):
+        serializer = SecurityQuestionsSetupSerializer(data=request.data)
+        if serializer.is_valid():
+            user = request.user
+            
+            # Get or create security questions
+            security_questions, created = UserSecurityQuestions.objects.get_or_create(
+                user=user,
+                defaults={
+                    'security_answer': serializer.validated_data['security_answer'],
+                    'professor_last_name': serializer.validated_data['professor_last_name']
+                }
+            )
+            
+            if not created:
+                # Update existing security questions
+                security_questions.security_answer = serializer.validated_data['security_answer']
+                security_questions.professor_last_name = serializer.validated_data['professor_last_name']
+                security_questions.save()
+            
+            response_serializer = UserSecurityQuestionsSerializer(security_questions)
+            return Response(response_serializer.data, status=status.HTTP_200_OK)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class EmailPasswordResetRequestView(APIView):
+    """Send password reset code to user's email"""
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        serializer = EmailPasswordResetRequestSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            
+            try:
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
+                # Don't reveal if email exists or not for security
+                return Response({'message': 'If an account with this email exists, a reset code has been sent.'}, status=status.HTTP_200_OK)
+            
+            # Create reset code
+            reset_code = PasswordResetCode.create_for_user(user)
+            
+            # Send email with reset code
+            try:
+                subject = 'Password Reset Code - Marc-D'
+                message = f"""
+Hello {user.username},
+
+You have requested a password reset for your Marc-D account.
+
+Your password reset code is: {reset_code.code}
+
+This code will expire in 15 minutes.
+
+If you did not request this password reset, please ignore this email.
+
+Best regards,
+The Marc-D Team
+                """
+                
+                send_mail(
+                    subject=subject,
+                    message=message,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[email],
+                    fail_silently=False,
+                )
+                
+                return Response({'message': 'Password reset code sent to your email.'}, status=status.HTTP_200_OK)
+                
+            except Exception as e:
+                # Log the error but don't expose it to the user
+                print(f"Error sending email: {e}")
+                return Response({'error': 'Failed to send reset code. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class EmailPasswordResetVerifyView(APIView):
+    """Verify the reset code"""
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        serializer = EmailPasswordResetVerifySerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            code = serializer.validated_data['code']
+            
+            try:
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
+                return Response({'error': 'Invalid email or code.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Find the reset code
+            try:
+                reset_code = PasswordResetCode.objects.get(
+                    user=user,
+                    code=code,
+                    is_used=False
+                )
+            except PasswordResetCode.DoesNotExist:
+                return Response({'error': 'Invalid email or code.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if code is valid
+            if not reset_code.is_valid():
+                return Response({'error': 'Reset code has expired or is invalid.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            return Response({'message': 'Reset code verified successfully.'}, status=status.HTTP_200_OK)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class EmailPasswordResetConfirmView(APIView):
+    """Reset password using email code"""
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        serializer = EmailPasswordResetConfirmSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            code = serializer.validated_data['code']
+            new_password = serializer.validated_data['new_password']
+            
+            try:
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
+                return Response({'error': 'Invalid email or code.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Find the reset code
+            try:
+                reset_code = PasswordResetCode.objects.get(
+                    user=user,
+                    code=code,
+                    is_used=False
+                )
+            except PasswordResetCode.DoesNotExist:
+                return Response({'error': 'Invalid email or code.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if code is valid
+            if not reset_code.is_valid():
+                return Response({'error': 'Reset code has expired or is invalid.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Mark code as used
+            reset_code.is_used = True
+            reset_code.save()
+            
+            # Set new password
+            user.set_password(new_password)
+            user.save()
+            
+            return Response({'message': 'Password reset successfully.'}, status=status.HTTP_200_OK)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AdminLoginView(APIView):
+    """Custom admin login view with logging"""
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        """Handle admin login with logging"""
+        username = request.data.get('username')
+        password = request.data.get('password')
+        
+        if not username or not password:
+            AdminLoginLog.log_failed_login(
+                username or 'unknown',
+                request,
+                'Missing username or password'
+            )
+            return Response({'error': 'Username and password are required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Authenticate user
+        user = authenticate(request, username=username, password=password)
+        
+        if user is None:
+            # Log failed login
+            AdminLoginLog.log_failed_login(
+                username,
+                request,
+                'Invalid credentials'
+            )
+            return Response({'error': 'Invalid username or password'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        if not user.is_staff:
+            # Log failed login for non-staff user
+            AdminLoginLog.log_failed_login(
+                username,
+                request,
+                'User is not staff/admin'
+            )
+            return Response({'error': 'Access denied. Admin privileges required.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Log successful login
+        AdminLoginLog.log_successful_login(user, request)
+        
+        # Perform Django login
+        django_login(request, user)
+        
+        return Response({
+            'message': 'Login successful',
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'is_staff': user.is_staff,
+                'is_superuser': user.is_superuser
+            }
+        }, status=status.HTTP_200_OK)
+    
+    def get(self, request):
+        """Show admin login form"""
+        return render(request, 'admin/login.html')
+
+
+class AdminLoginLogView(APIView):
+    """View admin login logs (admin only)"""
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    
+    def get(self, request):
+        """Get admin login logs"""
+        if not request.user.is_staff:
+            return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Get query parameters for filtering
+        days = request.query_params.get('days', 30)
+        user_id = request.query_params.get('user_id')
+        success_only = request.query_params.get('success_only', 'false').lower() == 'true'
+        
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        # Filter by date range
+        cutoff_date = timezone.now() - timedelta(days=int(days))
+        logs = AdminLoginLog.objects.filter(login_time__gte=cutoff_date)
+        
+        # Filter by user if specified
+        if user_id:
+            logs = logs.filter(user_id=user_id)
+        
+        # Filter by success if specified
+        if success_only:
+            logs = logs.filter(success=True)
+        
+        # Prepare response data
+        log_data = []
+        for log in logs[:100]:  # Limit to 100 most recent
+            log_data.append({
+                'id': log.id,
+                'user': {
+                    'id': log.user.id if log.user else None,
+                    'username': log.user.username if log.user else 'Unknown'
+                },
+                'login_time': log.login_time,
+                'ip_address': log.ip_address,
+                'user_agent': log.user_agent,
+                'success': log.success,
+                'failure_reason': log.failure_reason
+            })
+        
+        return Response({
+            'logs': log_data,
+            'total_count': logs.count(),
+            'successful_logins': logs.filter(success=True).count(),
+            'failed_logins': logs.filter(success=False).count()
+        }, status=status.HTTP_200_OK)
 
 
 

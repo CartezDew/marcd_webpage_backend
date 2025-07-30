@@ -26,6 +26,16 @@ from .views import (
     TestAuthView,
     FileDuplicateView,
     FolderDuplicateView,
+    PasswordChangeView,
+    PasswordResetRequestView,
+    PasswordResetConfirmView,
+    SecurityQuestionsSetupView,
+    SecurityQuestionsUpdateView,
+    EmailPasswordResetRequestView,
+    EmailPasswordResetVerifyView,
+    EmailPasswordResetConfirmView,
+    AdminLoginView,
+    AdminLoginLogView,
 )
 
 urlpatterns = [
@@ -51,6 +61,20 @@ urlpatterns = [
     
     # Test authentication endpoint
     path('api/test-auth/', TestAuthView.as_view(), name='test-auth'),
+    
+    # Admin login and logging routes
+    path('api/admin/login/', AdminLoginView.as_view(), name='admin-login'),
+    path('api/admin/login-logs/', AdminLoginLogView.as_view(), name='admin-login-logs'),
+    
+    # Password management routes
+    path('api/password/change/', PasswordChangeView.as_view(), name='password-change'),
+    path('api/password/reset/request/', PasswordResetRequestView.as_view(), name='password-reset-request'),
+    path('api/password/reset/confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
+    path('api/password/reset/email/request/', EmailPasswordResetRequestView.as_view(), name='email-password-reset-request'),
+    path('api/password/reset/email/verify/', EmailPasswordResetVerifyView.as_view(), name='email-password-reset-verify'),
+    path('api/password/reset/email/confirm/', EmailPasswordResetConfirmView.as_view(), name='email-password-reset-confirm'),
+    path('api/security-questions/setup/', SecurityQuestionsSetupView.as_view(), name='security-questions-setup'),
+    path('api/security-questions/update/', SecurityQuestionsUpdateView.as_view(), name='security-questions-update'),
     
     # File management routes
     path('api/files/', FileViewSet.as_view({'get': 'list'}), name='files-list'),
@@ -89,20 +113,20 @@ urlpatterns = [
     path('api/folders/<int:pk>/download/', FolderDownloadView.as_view(), name='folder-download'),
     
     # File tags routes
-    path('api/tags/', FileTagViewSet.as_view({'get': 'list', 'post': 'create'}), name='tags-list'),
-    path('api/tags/<int:id>/', FileTagViewSet.as_view({
+    path('api/file-tags/', FileTagViewSet.as_view({'get': 'list', 'post': 'create'}), name='file-tags-list'),
+    path('api/file-tags/<int:pk>/', FileTagViewSet.as_view({
         'get': 'retrieve',
         'put': 'update',
         'patch': 'partial_update',
         'delete': 'destroy'
-    }), name='tags-detail'),
+    }), name='file-tags-detail'),
     
-    # File previews routes
-    path('api/previews/', FilePreviewViewSet.as_view({'get': 'list'}), name='previews-list'),
-    path('api/previews/<int:id>/', FilePreviewViewSet.as_view({
+    # File preview routes
+    path('api/file-previews/', FilePreviewViewSet.as_view({'get': 'list'}), name='file-previews-list'),
+    path('api/file-previews/<int:pk>/', FilePreviewViewSet.as_view({
         'get': 'retrieve',
         'put': 'update',
         'patch': 'partial_update',
         'delete': 'destroy'
-    }), name='previews-detail'),
+    }), name='file-previews-detail'),
 ]
