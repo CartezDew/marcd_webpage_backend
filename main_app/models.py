@@ -206,6 +206,7 @@ class FilePreview(models.Model):
 
 
 class WaitlistEntry(models.Model):
+    entry_id = models.CharField(max_length=20, unique=True, editable=False, blank=True)
     email = models.EmailField()
     created_at = models.DateTimeField(auto_now_add=True)
     
@@ -224,11 +225,21 @@ class WaitlistEntry(models.Model):
             raise ValidationError({'email': 'Please enter a valid email address'})
     
     def save(self, *args, **kwargs):
+        if not self.entry_id:
+            # Generate unique entry ID: WL-001, WL-002, etc.
+            last_entry = WaitlistEntry.objects.order_by('-id').first()
+            if last_entry and last_entry.entry_id:
+                last_id_num = int(last_entry.entry_id.replace("WL-", ""))
+                new_id_num = last_id_num + 1
+            else:
+                new_id_num = 1
+            self.entry_id = f"WL-{new_id_num:03d}"  # WL-001, WL-002, etc.
+        
         self.clean()
         super().save(*args, **kwargs)
     
     def __str__(self):
-        return f"{self.email} - {self.created_at.strftime('%Y-%m-%d %H:%M:%S')}"
+        return f"{self.entry_id} - {self.email} - {self.created_at.strftime('%Y-%m-%d %H:%M:%S')}"
     
     class Meta:
         verbose_name_plural = "Waitlist Entries"

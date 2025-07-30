@@ -71,10 +71,10 @@ class FilePreviewAdmin(admin.ModelAdmin):
 
 
 class WaitlistEntryAdmin(admin.ModelAdmin):
-    list_display = ['email', 'created_at']
+    list_display = ['entry_id', 'email', 'created_at']
     list_filter = ['created_at']
-    search_fields = ['email']
-    readonly_fields = ['created_at']
+    search_fields = ['email', 'entry_id']
+    readonly_fields = ['entry_id', 'created_at']
 
 
 class ContactSubmissionAdmin(admin.ModelAdmin):

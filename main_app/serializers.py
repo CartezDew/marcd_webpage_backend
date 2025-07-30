@@ -185,8 +185,8 @@ class FileSerializer(serializers.ModelSerializer):
 class WaitlistEntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = WaitlistEntry
-        fields = ['id', 'email', 'created_at']
-        read_only_fields = ['id', 'created_at']
+        fields = ['id', 'entry_id', 'email', 'created_at']
+        read_only_fields = ['id', 'entry_id', 'created_at']
     
     def validate_email(self, value):
         # Check if email contains @ symbol
@@ -205,10 +205,7 @@ class WaitlistEntrySerializer(serializers.ModelSerializer):
         if not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', value):
             raise serializers.ValidationError("Please enter a valid email address format")
         
-        # Check for duplicate email (case-insensitive)
-        if WaitlistEntry.objects.filter(email__iexact=value).exists():
-            raise serializers.ValidationError("Invalid email address, please try again.")
-        
+        # Allow multiple entries with the same email - no duplicate check
         return value
 
 
