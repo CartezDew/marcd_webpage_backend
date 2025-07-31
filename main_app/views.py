@@ -1627,4 +1627,24 @@ class AdminLoginLogView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+# Debug endpoint for mobile testing
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.AllowAny])
+def mobile_debug_view(request):
+    """Debug endpoint to test mobile requests"""
+    user_agent = request.META.get('HTTP_USER_AGENT', '')
+    
+    debug_info = {
+        'method': request.method,
+        'path': request.path,
+        'user_agent': user_agent,
+        'is_mobile': any(indicator in user_agent.lower() for indicator in ['mobile', 'android', 'iphone', 'ipad']),
+        'headers': dict(request.META),
+        'data': request.data if hasattr(request, 'data') else None,
+        'csrf_exempt': getattr(request, '_dont_enforce_csrf_checks', False),
+    }
+    
+    return Response(debug_info, status=status.HTTP_200_OK)
+
+
 

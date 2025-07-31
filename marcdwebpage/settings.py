@@ -25,6 +25,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
+    'main_app.middleware.MobileCompatibilityMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -45,6 +46,11 @@ CORS_ALLOWED_ORIGINS = [
     "https://marc-d.org",
     # Add any additional domains your frontend might be hosted on
 ]
+
+# Allow all origins in production for mobile compatibility (temporary)
+# TODO: Replace with specific mobile app domains
+if not DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
 
 # For development, you might want to allow all origins
 if DEBUG:
@@ -74,6 +80,13 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    'x-forwarded-for',
+    'x-forwarded-proto',
+    'cache-control',
+    'pragma',
+    'sec-fetch-dest',
+    'sec-fetch-mode',
+    'sec-fetch-site',
 ]
 
 # Allow credentials and handle preflight requests
@@ -81,6 +94,10 @@ CORS_EXPOSE_HEADERS = ['content-type', 'authorization']
 CORS_ALLOW_ALL_HEADERS = True
 CORS_PREFLIGHT_MAX_AGE = 86400
 CORS_ALLOW_ORIGIN_ALLOW_ALL = DEBUG
+
+# Enhanced mobile support
+CORS_ALLOW_PRIVATE_NETWORK = True
+CORS_REPLACE_HTTPS_REFERER = True
 
 # Additional CSRF settings for API
 CSRF_TRUSTED_ORIGINS = [
