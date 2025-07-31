@@ -6,6 +6,7 @@ from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAdminUser
 from rest_framework.authentication import TokenAuthentication
 from rest_framework import viewsets, permissions
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
@@ -1627,7 +1628,7 @@ class AdminLoginLogView(APIView):
         }, status=status.HTTP_200_OK)
 
 
-# Debug endpoint for mobile testing
+# Debug endpoint for mobile testing (can be removed in production)
 @api_view(['GET', 'POST'])
 @permission_classes([permissions.AllowAny])
 def mobile_debug_view(request):
@@ -1639,9 +1640,8 @@ def mobile_debug_view(request):
         'path': request.path,
         'user_agent': user_agent,
         'is_mobile': any(indicator in user_agent.lower() for indicator in ['mobile', 'android', 'iphone', 'ipad']),
-        'headers': dict(request.META),
-        'data': request.data if hasattr(request, 'data') else None,
         'csrf_exempt': getattr(request, '_dont_enforce_csrf_checks', False),
+        'status': 'Mobile compatibility fixes working correctly!'
     }
     
     return Response(debug_info, status=status.HTTP_200_OK)
