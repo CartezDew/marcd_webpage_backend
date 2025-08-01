@@ -37,6 +37,7 @@ from .views import (
     AdminLoginView,
     AdminLoginLogView,
     mobile_debug_view,
+    mobile_error_report,
 )
 
 urlpatterns = [
@@ -63,6 +64,7 @@ urlpatterns = [
     # Test authentication endpoint
     path('api/test-auth/', TestAuthView.as_view(), name='test-auth'),
     path('api/debug/mobile/', mobile_debug_view, name='mobile_debug'),
+    path('api/mobile/error-report/', mobile_error_report, name='mobile-error-report'),
     
     # Admin login and logging routes
     path('api/admin/login/', AdminLoginView.as_view(), name='admin-login'),

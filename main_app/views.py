@@ -10,7 +10,9 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from django.utils import timezone
 from django.http import HttpResponse, Http404
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -114,12 +116,33 @@ class CustomTokenObtainPairView(APIView):
     authentication_classes = []
     permission_classes = []
     
+    def log_mobile_request(self, request, success=True, error_msg=None):
+        """Log mobile requests for debugging"""
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        is_mobile = any(indicator in user_agent.lower() for indicator in ['mobile', 'android', 'iphone', 'ipad'])
+        
+        if is_mobile:
+            log_data = {
+                'timestamp': timezone.now().isoformat(),
+                'method': request.method,
+                'path': request.path,
+                'user_agent': user_agent,
+                'ip': request.META.get('REMOTE_ADDR', ''),
+                'success': success,
+                'error': error_msg,
+                'data': request.data if hasattr(request, 'data') else None,
+            }
+            print(f"MOBILE_LOGIN_DEBUG: {log_data}")
+    
     @csrf_exempt
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
     
     def post(self, request, *args, **kwargs):
         try:
+            # Log mobile request at start
+            self.log_mobile_request(request, success=False, error_msg="Request started")
+            
             # Parse request data from multiple sources
             data = {}
             
@@ -159,6 +182,7 @@ class CustomTokenObtainPairView(APIView):
                 print(f"Password provided: {'Yes' if password else 'No'}")
             
             if not username_or_email or not password:
+                self.log_mobile_request(request, success=False, error_msg="Missing credentials")
                 return Response({
                     'error': 'Both username/email and password are required',
                     'received_data': list(data.keys()) if settings.DEBUG and data else None,
@@ -189,12 +213,14 @@ class CustomTokenObtainPairView(APIView):
                         user = None
             
             if user is None:
+                self.log_mobile_request(request, success=False, error_msg="Invalid credentials")
                 return Response({
                     'error': 'Invalid credentials. Please check your username/email and password.',
                     'hint': 'Make sure you are using the correct username/email and password combination.'
                 }, status=status.HTTP_401_UNAUTHORIZED)
             
             if not user.is_active:
+                self.log_mobile_request(request, success=False, error_msg="Account disabled")
                 return Response({
                     'error': 'Account is disabled.'
                 }, status=status.HTTP_401_UNAUTHORIZED)
@@ -203,6 +229,9 @@ class CustomTokenObtainPairView(APIView):
             from rest_framework_simplejwt.tokens import RefreshToken
             refresh = RefreshToken.for_user(user)
             access = refresh.access_token
+            
+            # Log successful login
+            self.log_mobile_request(request, success=True, error_msg=None)
             
             return Response({
                 'refresh': str(refresh),
@@ -220,6 +249,7 @@ class CustomTokenObtainPairView(APIView):
             
         except Exception as e:
             # Log the full error for debugging
+            self.log_mobile_request(request, success=False, error_msg=f"Exception: {str(e)}")
             if settings.DEBUG:
                 print(f"CustomTokenObtainPairView error: {str(e)}")
                 import traceback
@@ -1645,6 +1675,42 @@ def mobile_debug_view(request):
     }
     
     return Response(debug_info, status=status.HTTP_200_OK)
+
+
+# Mobile error reporting endpoint
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def mobile_error_report(request):
+    """Endpoint for mobile devices to report errors"""
+    try:
+        data = request.data
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        ip = request.META.get('REMOTE_ADDR', '')
+        
+        error_report = {
+            'timestamp': timezone.now().isoformat(),
+            'user_agent': user_agent,
+            'ip': ip,
+            'error_type': data.get('error_type', 'unknown'),
+            'error_message': data.get('error_message', ''),
+            'error_stack': data.get('error_stack', ''),
+            'page_url': data.get('page_url', ''),
+            'browser_info': data.get('browser_info', {}),
+            'network_info': data.get('network_info', {}),
+        }
+        
+        print(f"MOBILE_ERROR_REPORT: {error_report}")
+        
+        return Response({
+            'status': 'Error reported successfully',
+            'error_id': f"ERR-{int(timezone.now().timestamp())}"
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        print(f"Error in mobile_error_report: {str(e)}")
+        return Response({
+            'status': 'Error report received'
+        }, status=status.HTTP_200_OK)
 
 
 
