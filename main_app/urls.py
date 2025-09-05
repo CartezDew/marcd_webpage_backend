@@ -36,6 +36,7 @@ from .views import (
     EmailPasswordResetConfirmView,
     AdminLoginView,
     AdminLoginLogView,
+    CustomTokenObtainPairView,
     mobile_debug_view,
     mobile_error_report,
 )
@@ -65,6 +66,11 @@ urlpatterns = [
     path('api/test-auth/', TestAuthView.as_view(), name='test-auth'),
     path('api/debug/mobile/', mobile_debug_view, name='mobile_debug'),
     path('api/mobile/error-report/', mobile_error_report, name='mobile-error-report'),
+    
+    # Additional login endpoints for mobile compatibility
+    path('login', CustomTokenObtainPairView.as_view(), name='login_no_slash'),
+    path('api/login', CustomTokenObtainPairView.as_view(), name='api_login_no_slash'),
+    path('api/auth/login', CustomTokenObtainPairView.as_view(), name='auth_login_no_slash'),
     
     # Admin login and logging routes
     path('api/admin/login/', AdminLoginView.as_view(), name='admin-login'),
