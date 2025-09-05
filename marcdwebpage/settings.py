@@ -47,18 +47,12 @@ CORS_ALLOWED_ORIGINS = [
     # Add any additional domains your frontend might be hosted on
 ]
 
-# Allow all origins in production for mobile compatibility (temporary)
-# TODO: Replace with specific mobile app domains
-if not DEBUG:
-    CORS_ALLOW_ALL_ORIGINS = True
-
-# For development, you might want to allow all origins
-if DEBUG:
-    CORS_ALLOW_ALL_ORIGINS = True
-
-# Additional CORS settings for development
+# CORS configuration for mobile compatibility
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only in development
+
+# Allow all origins for mobile compatibility (both dev and production)
+# This is necessary for mobile apps that may not have predictable origins
+CORS_ALLOW_ALL_ORIGINS = True
 
 # Additional CORS settings for mobile compatibility
 CORS_ALLOW_METHODS = [
@@ -90,13 +84,27 @@ CORS_ALLOW_HEADERS = [
 ]
 
 # Allow credentials and handle preflight requests
-CORS_EXPOSE_HEADERS = ['content-type', 'authorization']
+CORS_EXPOSE_HEADERS = ['content-type', 'authorization', 'x-mobile-device']
 CORS_ALLOW_ALL_HEADERS = True
 CORS_PREFLIGHT_MAX_AGE = 86400
-CORS_ALLOW_ORIGIN_ALLOW_ALL = DEBUG
 
 # Enhanced mobile support
 CORS_ALLOW_PRIVATE_NETWORK = True
+
+# Additional mobile-specific CORS settings
+CORS_ALLOW_HEADERS += [
+    'x-mobile-device',
+    'x-requested-with',
+    'x-csrftoken',
+    'x-forwarded-for',
+    'x-forwarded-proto',
+    'sec-fetch-dest',
+    'sec-fetch-mode',
+    'sec-fetch-site',
+    'sec-ch-ua',
+    'sec-ch-ua-mobile',
+    'sec-ch-ua-platform'
+]
 
 # Additional CSRF settings for API
 CSRF_TRUSTED_ORIGINS = [

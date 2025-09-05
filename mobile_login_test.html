@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Login Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        .debug-info {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Mobile Login Test</h1>
+        <p>This page helps test mobile login functionality and debug issues.</p>
+        
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">Username or Email:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <button type="submit">Test Login</button>
+        </form>
+        
+        <div id="result"></div>
+        
+        <div class="debug-info">
+            <h3>Debug Information</h3>
+            <div id="debugInfo"></div>
+        </div>
+    </div>
+
+    <script>
+        // Update this URL to match your backend
+        const BACKEND_URL = 'https://your-backend-url.com'; // Replace with your actual backend URL
+        
+        // Get debug information
+        function getDebugInfo() {
+            return {
+                userAgent: navigator.userAgent,
+                platform: navigator.platform,
+                language: navigator.language,
+                cookieEnabled: navigator.cookieEnabled,
+                onLine: navigator.onLine,
+                screenWidth: screen.width,
+                screenHeight: screen.height,
+                windowWidth: window.innerWidth,
+                windowHeight: window.innerHeight,
+                devicePixelRatio: window.devicePixelRatio || 1,
+                timestamp: new Date().toISOString(),
+                connection: navigator.connection ? {
+                    effectiveType: navigator.connection.effectiveType,
+                    downlink: navigator.connection.downlink,
+                    rtt: navigator.connection.rtt
+                } : null
+            };
+        }
+        
+        // Display debug information
+        function displayDebugInfo() {
+            const debugInfo = getDebugInfo();
+            document.getElementById('debugInfo').innerHTML = JSON.stringify(debugInfo, null, 2);
+        }
+        
+        // Test mobile debug endpoint
+        async function testMobileDebug() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/debug/mobile/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        test: 'mobile_debug_test',
+                        timestamp: new Date().toISOString()
+                    })
+                });
+                
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                return { error: error.message };
+            }
+        }
+        
+        // Test login
+        async function testLogin(username, password) {
+            const loginData = {
+                username: username,
+                password: password
+            };
+            
+            try {
+                // Test different endpoints
+                const endpoints = [
+                    '/api/token/',
+                    '/login/',
+                    '/api/login/',
+                    '/api/auth/login/',
+                    '/api/signin/',
+                    '/auth/login/'
+                ];
+                
+                const results = {};
+                
+                for (const endpoint of endpoints) {
+                    try {
+                        const response = await fetch(`${BACKEND_URL}${endpoint}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                            },
+                            body: JSON.stringify(loginData)
+                        });
+                        
+                        const data = await response.json();
+                        results[endpoint] = {
+                            status: response.status,
+                            statusText: response.statusText,
+                            data: data,
+                            success: response.ok
+                        };
+                    } catch (error) {
+                        results[endpoint] = {
+                            error: error.message,
+                            success: false
+                        };
+                    }
+                }
+                
+                return results;
+            } catch (error) {
+                return { error: error.message };
+            }
+        }
+        
+        // Display results
+        function displayResult(result, isError = false) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = `result ${isError ? 'error' : 'success'}`;
+            resultDiv.textContent = JSON.stringify(result, null, 2);
+        }
+        
+        // Handle form submission
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                displayResult({ error: 'Please enter both username and password' }, true);
+                return;
+            }
+            
+            // Show loading
+            displayResult({ message: 'Testing login...', status: 'loading' });
+            
+            // Test mobile debug first
+            const debugResult = await testMobileDebug();
+            console.log('Mobile Debug Result:', debugResult);
+            
+            // Test login
+            const loginResult = await testLogin(username, password);
+            
+            // Combine results
+            const combinedResult = {
+                debug: debugResult,
+                login: loginResult,
+                clientInfo: getDebugInfo()
+            };
+            
+            displayResult(combinedResult, false);
+        });
+        
+        // Initialize debug info on page load
+        displayDebugInfo();
+        
+        // Test mobile debug endpoint on page load
+        testMobileDebug().then(result => {
+            console.log('Initial mobile debug test:', result);
+        });
+    </script>
+</body>
+</html>

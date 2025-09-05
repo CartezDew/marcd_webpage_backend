@@ -119,7 +119,7 @@ class CustomTokenObtainPairView(APIView):
     def log_mobile_request(self, request, success=True, error_msg=None):
         """Log mobile requests for debugging"""
         user_agent = request.META.get('HTTP_USER_AGENT', '')
-        is_mobile = any(indicator in user_agent.lower() for indicator in ['mobile', 'android', 'iphone', 'ipad'])
+        is_mobile = any(indicator in user_agent.lower() for indicator in ['mobile', 'android', 'iphone', 'ipad', 'ipod', 'blackberry', 'webos', 'windows phone', 'opera mini', 'kindle', 'silk'])
         
         if is_mobile:
             log_data = {
@@ -131,6 +131,10 @@ class CustomTokenObtainPairView(APIView):
                 'success': success,
                 'error': error_msg,
                 'data': request.data if hasattr(request, 'data') else None,
+                'content_type': request.content_type,
+                'headers': dict(request.headers),
+                'csrf_exempt': getattr(request, '_dont_enforce_csrf_checks', False),
+                'mobile_device': getattr(request, '_mobile_device', False),
             }
             print(f"MOBILE_LOGIN_DEBUG: {log_data}")
     
@@ -143,8 +147,12 @@ class CustomTokenObtainPairView(APIView):
             # Log mobile request at start
             self.log_mobile_request(request, success=False, error_msg="Request started")
             
-            # Parse request data from multiple sources
+            # Parse request data from multiple sources with enhanced mobile support
             data = {}
+            
+            # Enhanced mobile data parsing
+            user_agent = request.META.get('HTTP_USER_AGENT', '').lower()
+            is_mobile = any(indicator in user_agent for indicator in ['mobile', 'android', 'iphone', 'ipad', 'ipod', 'blackberry', 'webos', 'windows phone', 'opera mini', 'kindle', 'silk'])
             
             # Try request.data first (DRF parsed data)
             if hasattr(request, 'data') and request.data:
@@ -152,13 +160,45 @@ class CustomTokenObtainPairView(APIView):
             # Fallback to request.POST for form data
             elif hasattr(request, 'POST') and request.POST:
                 data = request.POST
-            # Last resort: parse JSON from request.body
+            # Enhanced mobile JSON parsing
             else:
                 try:
                     import json
                     if hasattr(request, 'body') and request.body:
-                        data = json.loads(request.body.decode('utf-8'))
-                except (json.JSONDecodeError, UnicodeDecodeError):
+                        # Try different encodings for mobile compatibility
+                        try:
+                            body_text = request.body.decode('utf-8')
+                        except UnicodeDecodeError:
+                            body_text = request.body.decode('latin-1')
+                        
+                        # Parse JSON with mobile-specific handling
+                        data = json.loads(body_text)
+                        
+                        # Log mobile-specific parsing for debugging
+                        if is_mobile and settings.DEBUG:
+                            print(f"MOBILE_JSON_PARSING: Successfully parsed JSON for mobile device")
+                            print(f"MOBILE_JSON_DATA: {data}")
+                            
+                except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                    if is_mobile and settings.DEBUG:
+                        print(f"MOBILE_JSON_ERROR: Failed to parse JSON: {str(e)}")
+                        print(f"MOBILE_BODY_RAW: {request.body}")
+                    data = {}
+            
+            # Additional mobile form data parsing
+            if not data and is_mobile:
+                # Try to parse as form-encoded data
+                try:
+                    if hasattr(request, 'POST') and request.POST:
+                        data = dict(request.POST)
+                    elif hasattr(request, 'body') and request.body:
+                        from urllib.parse import parse_qs
+                        body_text = request.body.decode('utf-8')
+                        parsed = parse_qs(body_text)
+                        data = {k: v[0] if len(v) == 1 else v for k, v in parsed.items()}
+                except Exception as e:
+                    if settings.DEBUG:
+                        print(f"MOBILE_FORM_PARSING_ERROR: {str(e)}")
                     data = {}
             
             # Handle multiple possible field names for username/email
@@ -1664,13 +1704,22 @@ class AdminLoginLogView(APIView):
 def mobile_debug_view(request):
     """Debug endpoint to test mobile requests"""
     user_agent = request.META.get('HTTP_USER_AGENT', '')
+    mobile_indicators = ['mobile', 'android', 'iphone', 'ipad', 'ipod', 'blackberry', 'webos', 'windows phone', 'opera mini', 'kindle', 'silk']
+    is_mobile = any(indicator in user_agent.lower() for indicator in mobile_indicators)
     
     debug_info = {
         'method': request.method,
         'path': request.path,
         'user_agent': user_agent,
-        'is_mobile': any(indicator in user_agent.lower() for indicator in ['mobile', 'android', 'iphone', 'ipad']),
+        'is_mobile': is_mobile,
+        'mobile_indicators_found': [indicator for indicator in mobile_indicators if indicator in user_agent.lower()],
         'csrf_exempt': getattr(request, '_dont_enforce_csrf_checks', False),
+        'mobile_device_flag': getattr(request, '_mobile_device', False),
+        'content_type': request.content_type,
+        'headers': dict(request.headers),
+        'data': request.data if hasattr(request, 'data') else None,
+        'post_data': dict(request.POST) if hasattr(request, 'POST') else None,
+        'body': request.body.decode('utf-8') if hasattr(request, 'body') and request.body else None,
         'status': 'Mobile compatibility fixes working correctly!'
     }
     
