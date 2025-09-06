@@ -1763,6 +1763,7 @@ def mobile_error_report(request):
 
 
 @api_view(['POST'])
+@permission_classes([])  # No authentication required
 def load_users_endpoint(request):
     """
     API endpoint to load users from users.json into the database
