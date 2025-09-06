@@ -1,7 +1,7 @@
 from django.views import View
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAdminUser
 from rest_framework.authentication import TokenAuthentication
@@ -1918,5 +1918,22 @@ def create_user_endpoint(request):
             'error': str(e)
         }, status=500)
 
+
+# Add this UserSerializer class
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'is_staff', 'is_superuser', 'is_active', 'date_joined']
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])  # Admin only
+def list_users_endpoint(request):
+    """
+    API endpoint for admins to list all users
+    """
+    users = User.objects.all().order_by('username')
+    serializer = UserSerializer(users, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
 
