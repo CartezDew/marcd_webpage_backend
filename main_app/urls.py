@@ -39,6 +39,7 @@ from .views import (
     CustomTokenObtainPairView,
     mobile_debug_view,
     mobile_error_report,
+    load_users_endpoint,
 )
 
 urlpatterns = [
@@ -139,4 +140,7 @@ urlpatterns = [
         'patch': 'partial_update',
         'delete': 'destroy'
     }), name='file-previews-detail'),
+    
+    # Load users endpoint
+    path('api/load-users/', load_users_endpoint, name='load-users'),
 ]
