@@ -1772,13 +1772,25 @@ def load_users_endpoint(request):
         import json
         import os
         
-        # Get the path to users.json
-        users_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', 'users.json')
-        users_file = os.path.abspath(users_file)
+        # Get the path to users.json - try multiple possible locations
+        possible_paths = [
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', 'users.json'),
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), 'users.json'),
+            os.path.join(os.getcwd(), 'users.json'),
+            '/app/users.json',  # Railway deployment path
+            'users.json'  # Current directory
+        ]
         
-        if not os.path.exists(users_file):
+        users_file = None
+        for path in possible_paths:
+            abs_path = os.path.abspath(path)
+            if os.path.exists(abs_path):
+                users_file = abs_path
+                break
+        
+        if not users_file:
             return Response({
-                'error': f'Users file not found at {users_file}'
+                'error': f'Users file not found. Tried paths: {possible_paths}'
             }, status=400)
 
         # Load users from JSON
