@@ -441,7 +441,7 @@ class ContactUsViewSet(viewsets.ModelViewSet):
 class FileViewSet(viewsets.ModelViewSet):
     queryset = File.objects.all()
     serializer_class = FileSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]  # Admin only
     authentication_classes = [JWTAuthentication]
     # filter_backends = [SearchFilter]
     search_fields = ['name', 'file_type', 'uploaded_by__username']
@@ -550,7 +550,7 @@ class FileViewSet(viewsets.ModelViewSet):
 class FolderViewSet(viewsets.ModelViewSet):
     queryset = Folder.objects.all()
     serializer_class = FolderSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]  # Admin only
     authentication_classes = [JWTAuthentication]
     # filter_backends = [SearchFilter]
     search_fields = ['name', 'created_by__username']
@@ -676,7 +676,7 @@ class FolderViewSet(viewsets.ModelViewSet):
 
 
 class FileUploadView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]  # Admin only
     authentication_classes = [JWTAuthentication]
     
     @rate_limit('file_upload', limit=50, period=3600)  # 50 uploads per hour
@@ -791,7 +791,7 @@ class FileUploadView(APIView):
 
 
 class FileDownloadView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]  # Admin only
     authentication_classes = [JWTAuthentication]
     
     @rate_limit('file_download', limit=200, period=3600)  # 200 downloads per hour
@@ -826,7 +826,7 @@ class FileDownloadView(APIView):
 
 
 class FileMoveView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]  # Admin only
     
     def post(self, request, pk):
         try:
@@ -857,7 +857,7 @@ class FileMoveView(APIView):
 
 
 class FolderMoveView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]  # Admin only
     
     def post(self, request, pk):
         try:
@@ -893,7 +893,7 @@ class FolderMoveView(APIView):
 class FileTagViewSet(viewsets.ModelViewSet):
     queryset = FileTag.objects.all()
     serializer_class = FileTagSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]  # Admin only
     # filter_backends = [SearchFilter]
     search_fields = ['name']
     
@@ -904,7 +904,7 @@ class FileTagViewSet(viewsets.ModelViewSet):
 class FileVersionViewSet(viewsets.ModelViewSet):
     queryset = FileVersion.objects.all()
     serializer_class = FileVersionSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]  # Admin only
     
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -913,7 +913,7 @@ class FileVersionViewSet(viewsets.ModelViewSet):
 class FilePermissionViewSet(viewsets.ModelViewSet):
     queryset = FilePermission.objects.all()
     serializer_class = FilePermissionSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]  # Admin only
     
     def perform_create(self, serializer):
         serializer.save(granted_by=self.request.user)
@@ -922,11 +922,11 @@ class FilePermissionViewSet(viewsets.ModelViewSet):
 class FilePreviewViewSet(viewsets.ModelViewSet):
     queryset = FilePreview.objects.all()
     serializer_class = FilePreviewSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]  # Admin only
 
 
 class FileSearchView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]  # Admin only
     
     def get(self, request):
         query = request.query_params.get('q', '')
@@ -947,7 +947,7 @@ class FileSearchView(APIView):
 
 
 class FileVersionUploadView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]  # Admin only
     
     def post(self, request, file_id):
         try:
@@ -979,7 +979,7 @@ class FileVersionUploadView(APIView):
 
 
 class FileVersionDownloadView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]  # Admin only
     
     def get(self, request, file_id, version_number):
         try:
@@ -1012,7 +1012,7 @@ class FileVersionDownloadView(APIView):
 
 
 class FilePermissionGrantView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]  # Admin only
     
     def post(self, request, file_id):
         try:
@@ -1054,7 +1054,7 @@ class FilePermissionGrantView(APIView):
 
 
 class FileByTagView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]  # Admin only
     
     def get(self, request):
         tag_ids = request.query_params.getlist('tags')
@@ -1067,7 +1067,7 @@ class FileByTagView(APIView):
 
 
 class TestAuthView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]  # Admin only
     
     def get(self, request):
         return Response({
@@ -1077,7 +1077,7 @@ class TestAuthView(APIView):
         })
 
 class TestFileOperationsView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]  # Admin only
     
     def get(self, request):
         """Test endpoint to check file and folder operations"""
@@ -1099,7 +1099,7 @@ class TestFileOperationsView(APIView):
 
 
 class FileDuplicateView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]  # Admin only
     authentication_classes = [JWTAuthentication]
     
     def post(self, request, pk):
@@ -1139,7 +1139,7 @@ class FileDuplicateView(APIView):
 
 
 class FolderDuplicateView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]  # Admin only
     authentication_classes = [JWTAuthentication]
     
     def post(self, request, pk):
@@ -1199,7 +1199,7 @@ class FolderDuplicateView(APIView):
 
 
 class FolderDownloadView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminUser]  # Admin only
     authentication_classes = [JWTAuthentication]
     
     def get(self, request, pk):
@@ -1763,7 +1763,7 @@ def mobile_error_report(request):
 
 
 @api_view(['POST'])
-@permission_classes([])  # No authentication required
+@permission_classes([IsAdminUser])  # Admin only
 def load_users_endpoint(request):
     """
     API endpoint to load users from users.json into the database
@@ -1850,6 +1850,69 @@ def load_users_endpoint(request):
             'results': results
         })
 
+    except Exception as e:
+        return Response({
+            'error': str(e)
+        }, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])  # Admin only
+def create_user_endpoint(request):
+    """
+    API endpoint for admins to create new users
+    """
+    try:
+        username = request.data.get('username')
+        email = request.data.get('email')
+        password = request.data.get('password')
+        first_name = request.data.get('first_name', '')
+        last_name = request.data.get('last_name', '')
+        is_staff = request.data.get('is_staff', False)
+        is_superuser = request.data.get('is_superuser', False)
+        
+        if not username or not email or not password:
+            return Response({
+                'error': 'Username, email, and password are required'
+            }, status=400)
+        
+        # Check if user already exists
+        if User.objects.filter(username=username).exists():
+            return Response({
+                'error': f'User with username "{username}" already exists'
+            }, status=400)
+        
+        if User.objects.filter(email=email).exists():
+            return Response({
+                'error': f'User with email "{email}" already exists'
+            }, status=400)
+        
+        # Create user
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name,
+            is_staff=is_staff,
+            is_superuser=is_superuser
+        )
+        
+        return Response({
+            'success': True,
+            'message': f'User "{username}" created successfully',
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'is_staff': user.is_staff,
+                'is_superuser': user.is_superuser,
+                'is_active': user.is_active
+            }
+        })
+        
     except Exception as e:
         return Response({
             'error': str(e)

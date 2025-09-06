@@ -40,6 +40,7 @@ from .views import (
     mobile_debug_view,
     mobile_error_report,
     load_users_endpoint,
+    create_user_endpoint,
 )
 
 urlpatterns = [
@@ -143,4 +144,7 @@ urlpatterns = [
     
     # Load users endpoint
     path('api/load-users/', load_users_endpoint, name='load-users'),
+    
+    # Create user endpoint (admin only)
+    path('api/create-user/', create_user_endpoint, name='create-user'),
 ]
